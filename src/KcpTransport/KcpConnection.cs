@@ -6,6 +6,6 @@ using System.Threading.Tasks;
 
 namespace KcpTransport;
 
-internal class KcpConnection
+public class KcpConnection
 {
 }

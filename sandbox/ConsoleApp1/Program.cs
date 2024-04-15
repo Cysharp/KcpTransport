@@ -7,26 +7,35 @@ using System.Net.Security;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text;
-using static KcpTransport.NativePort.KcpMethods;
-using ikcpcb = KcpTransport.NativePort.IKCPCB;
+using static KcpTransport.LowLevel.KcpMethods;
+using ikcpcb = KcpTransport.LowLevel.IKCPCB;
 using ConsoleApp1;
+
+
+//var server = QuicSandbox.QuicHelloServerAsync();
+
+//var client = QuicSandbox.QuicHelloClientAsync();
+
+//await Task.WhenAny(server, client);
+
+//await client;
 
 var server = Task.Run(() =>
 {
-    UdpSandbox.UdpHelloServer2();
+    KcpSandbox.KcpHelloServer();
 });
 
 
 Thread.Sleep(100);
 var client1 = Task.Run(() =>
 {
-    UdpSandbox.UdpHelloClient2();
+    KcpSandbox.KcpHelloClient();
 });
 //var client2 = Task.Run(() =>
 //{
 //    UdpHelloClient();
 //});
-await server;
+await await Task.WhenAny(client1, server);
 
 
 // unsafe
