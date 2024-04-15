@@ -2,16 +2,16 @@
 #pragma warning disable CS8981
 
 using System.Runtime.CompilerServices;
-using static KcpTransport.NativePort.CMethods;
-using static KcpTransport.NativePort.IQUEUEHEAD;
+using static KcpTransport.LowLevel.CMethods;
+using static KcpTransport.LowLevel.IQUEUEHEAD;
 using IINT32 = int;
-using ikcpcb = KcpTransport.NativePort.IKCPCB;
+using ikcpcb = KcpTransport.LowLevel.IKCPCB;
 using IUINT16 = ushort;
 using IUINT32 = uint;
 using IUINT8 = byte;
 using size_t = nint;
 
-namespace KcpTransport.NativePort;
+namespace KcpTransport.LowLevel;
 
 public static unsafe class KcpMethods
 {

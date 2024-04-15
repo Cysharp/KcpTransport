@@ -1,12 +1,12 @@
 ﻿#pragma warning disable CS8500
 
-using KcpTransport.NativePort;
+using KcpTransport.LowLevel;
 using System.Buffers;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-using static KcpTransport.NativePort.KcpMethods;
+using static KcpTransport.LowLevel.KcpMethods;
 
 namespace KcpTransport;
 

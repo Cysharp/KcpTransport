@@ -9,7 +9,7 @@ using size_t = nint;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 
-namespace KcpTransport.NativePort;
+namespace KcpTransport.LowLevel;
 
 internal static unsafe class CMethods
 {

@@ -7,7 +7,7 @@ using IINT32 = int;
 using IUINT32 = uint;
 using size_t = nint;
 
-namespace KcpTransport.NativePort;
+namespace KcpTransport.LowLevel;
 
 public unsafe struct IQUEUEHEAD
 {
