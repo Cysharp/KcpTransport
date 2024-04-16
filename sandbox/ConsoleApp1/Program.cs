@@ -20,21 +20,22 @@ using ConsoleApp1;
 
 //await client;
 
-var server = Task.Run(() =>
+var server = Task.Run(async () =>
 {
-    KcpSandbox.KcpHelloServer();
+    await KcpSandbox.KcpEchoServer();
 });
 
-
 Thread.Sleep(100);
-var client1 = Task.Run(() =>
+
+var client1 = Task.Run(async () =>
 {
-    KcpSandbox.KcpHelloClient();
+    await KcpSandbox.KcpEchoClient();
 });
 //var client2 = Task.Run(() =>
 //{
 //    UdpHelloClient();
 //});
+
 await await Task.WhenAny(client1, server);
 
 

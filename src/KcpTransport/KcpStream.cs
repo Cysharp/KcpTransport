@@ -1,118 +1,95 @@
 ﻿#pragma warning disable CS8500
 
-using KcpTransport.LowLevel;
 using System.Buffers;
-using System.Net.Sockets;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-
-using static KcpTransport.LowLevel.KcpMethods;
+using System.IO.Pipelines;
 
 namespace KcpTransport;
 
-
-public interface ISocketOperation
+public sealed unsafe class KcpStream : Stream, IBufferWriter<byte>
 {
-    int Receive(Span<byte> buffer);
-    int Send(ReadOnlySpan<byte> buffer);
-}
+    KcpConnection connection;
+    Pipe pipe;
+    Stream pipeReaderStream;
 
-public class SocketOperation(Socket socket) : ISocketOperation
-{
-    public int Receive(Span<byte> buffer) => socket.Receive(buffer);
-    public int Send(ReadOnlySpan<byte> buffer) => socket.Send(buffer);
-}
-
-public class MemorySocketOperation : ISocketOperation
-{
-    public List<byte[]> SendData { get; } = new();
-    public List<byte[]> ReceiveData { get; } = new();
-
-    public int Receive(Span<byte> buffer)
+    internal KcpStream(KcpConnection connection)
     {
-        ReceiveData.Add(buffer.ToArray());
-        return buffer.Length;
+        this.connection = connection;
+        this.pipe = new Pipe();
+        this.pipeReaderStream = pipe.Reader.AsStream();
     }
 
-    public int Send(ReadOnlySpan<byte> buffer)
+    // IBufferWriter
+
+    public void Advance(int count)
     {
-        SendData.Add(buffer.ToArray());
-        return buffer.Length;
-    }
-}
-
-
-public class SimpleUpdServer
-{
-
-}
-
-
-public sealed unsafe class KcpStream : Stream
-{
-    static readonly output_callback kcpOutputCallback = KcpOutputCallback;
-
-    ISocketOperation socket;
-    IKCPCB* kcp;
-    byte[] receiveBuffer; // TODO: ???
-
-    public KcpStream()
-        : this(0, (ISocketOperation)null!)
-    {
+        pipe.Writer.Advance(count);
     }
 
-    public KcpStream(uint conversationId, Socket socket)
-        : this(conversationId, new SocketOperation(socket))
+    public Memory<byte> GetMemory(int sizeHint = 0)
     {
+        return pipe.Writer.GetMemory(sizeHint);
     }
 
-    public KcpStream(uint conversationId, ISocketOperation socket)
+    public Span<byte> GetSpan(int sizeHint = 0)
     {
-        this.socket = socket;
-        receiveBuffer = new byte[1024];
-        kcp = ikcp_create(conversationId, this);
-        kcp->output = kcpOutputCallback;
+        return pipe.Writer.GetSpan(sizeHint);
+    }
 
-        ikcp_update(kcp, 0);
+    internal void WriterFlush()
+    {
+        _ = pipe.Writer.FlushAsync(); // TODO: async?
     }
 
     public override int Read(byte[] buffer, int offset, int count)
     {
-        // TODO:ReceiveFrom, IP?
-        var size = socket.Receive(buffer.AsSpan(offset, count));
-        fixed (byte* p = &buffer[offset])
-        {
-            ikcp_input(kcp, p, size); // return?
-            return ikcp_recv(kcp, p, count);
-        }
+        return pipeReaderStream.Read(buffer, offset, count);
+    }
+
+    public override int Read(Span<byte> buffer)
+    {
+        return pipeReaderStream.Read(buffer);
+    }
+
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        return pipeReaderStream.ReadAsync(buffer, offset, count , cancellationToken);
+    }
+
+    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        return pipeReaderStream.ReadAsync(buffer, cancellationToken);
     }
 
     public override void Write(byte[] buffer, int offset, int count)
     {
-        fixed (byte* p = &buffer[offset])
-        {
-            ikcp_send(kcp, p, count);
-        }
+        connection.SendBuffer(buffer.AsSpan(offset, count));
+    }
+
+    public override void Write(ReadOnlySpan<byte> buffer)
+    {
+        connection.SendBuffer(buffer);
+    }
+
+    public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+    {
+        connection.SendBuffer(buffer.AsSpan(offset, count));
+        return Task.CompletedTask;
+    }
+
+    public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        connection.SendBuffer(buffer.Span);
+        return default;
     }
 
     public override void Flush()
     {
-        ikcp_flush(kcp);
+        connection.Flush();
     }
-
-    static int KcpOutputCallback(byte* buf, int len, IKCPCB* kcp, object user)
-    {
-        var self = (KcpStream)user;
-        var buffer = new Span<byte>(buf, len);
-        var sent = self.socket.Send(buffer); // TODO: sync, TODO: SendTo(IP?)
-        return sent;
-    }
-
-    // TODO: dispose pattern
 
     protected override void Dispose(bool disposing)
     {
-        ikcp_release(kcp);
+        pipeReaderStream.Dispose();
     }
 
     #region NotSupported
