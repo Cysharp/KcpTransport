@@ -10,6 +10,7 @@ using System.Text;
 using static KcpTransport.LowLevel.KcpMethods;
 using ikcpcb = KcpTransport.LowLevel.IKCPCB;
 using ConsoleApp1;
+using System.Diagnostics;
 
 
 //var server = QuicSandbox.QuicHelloServerAsync();
@@ -20,16 +21,20 @@ using ConsoleApp1;
 
 //await client;
 
+
+
 var server = Task.Run(async () =>
 {
-    await KcpSandbox.KcpEchoServer();
+    UdpSandbox.UdpHelloServer();
+    //await KcpSandbox.KcpEchoServer();
 });
 
 Thread.Sleep(100);
 
 var client1 = Task.Run(async () =>
 {
-    await KcpSandbox.KcpEchoClient();
+    UdpSandbox.UdpHelloClient2();
+    //await KcpSandbox.KcpEchoClient();
 });
 //var client2 = Task.Run(() =>
 //{

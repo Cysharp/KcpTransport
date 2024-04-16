@@ -22,12 +22,14 @@ namespace ConsoleApp1
             const int bufferSize = 1024;
 
             using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             socket.Bind(new IPEndPoint(IPAddress.Any, listenPort));
 
             Console.WriteLine("UDP server started. Waiting for a message...");
 
-
             EndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
+
+            Socket newbindSocket = null!;
 
             while (true)
             {
@@ -36,11 +38,20 @@ namespace ConsoleApp1
 
                 string message = Encoding.ASCII.GetString(data, 0, receivedBytes);
 
+                if (newbindSocket == null)
+                {
+                    newbindSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                    newbindSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                    newbindSocket.Bind(new IPEndPoint(IPAddress.Any, listenPort));
+                    newbindSocket.Connect(remoteEP);
+                }
+
                 Console.WriteLine($"Received message from {remoteEP}: {message}");
 
                 string response = $"Server received your message: {message}";
                 byte[] responseData = Encoding.ASCII.GetBytes(response);
-                socket.SendTo(responseData, remoteEP);
+
+                newbindSocket.Send(responseData);
             }
         }
 
