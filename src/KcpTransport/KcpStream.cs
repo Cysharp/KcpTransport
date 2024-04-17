@@ -32,7 +32,7 @@ public sealed unsafe class KcpStream : Stream
 
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
-        return pipeReaderStream.ReadAsync(buffer, offset, count , cancellationToken);
+        return pipeReaderStream.ReadAsync(buffer, offset, count, cancellationToken);
     }
 
     public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
@@ -42,23 +42,29 @@ public sealed unsafe class KcpStream : Stream
 
     public override void Write(byte[] buffer, int offset, int count)
     {
-        connection.SendBuffer(buffer.AsSpan(offset, count));
+        connection.SendReliableBuffer(buffer.AsSpan(offset, count));
     }
 
     public override void Write(ReadOnlySpan<byte> buffer)
     {
-        connection.SendBuffer(buffer);
+        connection.SendReliableBuffer(buffer);
     }
 
     public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
-        connection.SendBuffer(buffer.AsSpan(offset, count));
+        connection.SendReliableBuffer(buffer.AsSpan(offset, count));
         return Task.CompletedTask;
     }
 
     public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
     {
-        connection.SendBuffer(buffer.Span);
+        connection.SendReliableBuffer(buffer.Span);
+        return default;
+    }
+
+    public ValueTask WriteUnreliableAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+    {
+        connection.SendUnreliableBuffer(buffer.Span);
         return default;
     }
 

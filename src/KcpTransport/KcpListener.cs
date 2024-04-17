@@ -13,6 +13,7 @@ public sealed class KcpListener : IDisposable
     Socket socket;
     Channel<KcpConnection> acceptQueue;
     ConcurrentDictionary<uint, KcpConnection> connections = new();
+    readonly long startingTimestamp = Stopwatch.GetTimestamp();
 
     public static ValueTask<KcpListener> ListenAsync(int listenPort)
     {
@@ -55,45 +56,97 @@ public sealed class KcpListener : IDisposable
         await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
 
         var receivedAddress = new SocketAddress(AddressFamily.InterNetwork);
+        var random = new Random();
 
         // TODO: mtu size
         var socketBuffer = GC.AllocateUninitializedArray<byte>(1500, pinned: true); // Create to pinned object heap
 
         while (true)
         {
-            // Socket is datagram so received contains full block
-            // var received = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, receivedAddress, cancellationToken);
+            // Socket is datagram so received data contains full block
             var received = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, receivedAddress, cancellationToken);
-            KcpConnection? kcpConnection;
-            unsafe
+
+            // first 4 byte is conversationId or extra packet type
+            var conversationId = MemoryMarshal.Read<uint>(socketBuffer.AsSpan(0, received));
+            var packetType = (PacketType)conversationId;
+            switch (packetType)
             {
-                var socketBufferPointer = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(socketBuffer));
-                // peek kcp data, simply first 4 byte is conversation id
-                var conversationId = MemoryMarshal.Read<uint>(socketBuffer);
+                case PacketType.Handshake:
+                ISSUE_CONVERSATION_ID:
+                    {
+                        conversationId = unchecked((uint)random.Next(100, int.MaxValue)); // 0~99 is reserved
+                        if (!connections.TryAdd(conversationId, null!)) // reserve dictionary space
+                        {
+                            goto ISSUE_CONVERSATION_ID;
+                        }
 
-                if (!connections.TryGetValue(conversationId, out kcpConnection))
-                {
-                    kcpConnection = new KcpConnection(conversationId, serverEndPoint, receivedAddress);
-                    connections[conversationId] = kcpConnection;
-                    acceptQueue.Writer.TryWrite(kcpConnection);
-                }
+                        // create new connection
+                        var kcpConnection = new KcpConnection(conversationId, serverEndPoint, receivedAddress);
+                        connections[conversationId] = kcpConnection;
+                        acceptQueue.Writer.TryWrite(kcpConnection);
+                        SendHandshakeResponse(socket, conversationId, receivedAddress);
+                    }
+                    break;
+                case PacketType.Unreliable:
+                    {
+                        conversationId = MemoryMarshal.Read<uint>(socketBuffer.AsSpan(4));
+                        if (!connections.TryGetValue(conversationId, out var kcpConnection))
+                        {
+                            // may incoming old packet, TODO: log it.
+                            continue;
+                        }
 
-                if (!kcpConnection.InputReceivedBuffer(socketBufferPointer, received)) continue;
+                        kcpConnection.WriteRawBuffer(socketBuffer.AsSpan(8));
+                        await kcpConnection.StreamFlushAsync(cancellationToken);
+                    }
+                    break;
+                default:
+                    {
+                        // Reliable
+                        if (conversationId < 100)
+                        {
+                            // may incoming invalid packet, TODO: log it.
+                            continue;
+                        }
+                        if (!connections.TryGetValue(conversationId, out var kcpConnection))
+                        {
+                            // may incoming old packet, TODO: log it.
+                            continue;
+                        }
+
+                        unsafe
+                        {
+                            var socketBufferPointer = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(socketBuffer));
+                            if (!kcpConnection.InputReceivedBuffer(socketBufferPointer, received)) continue;
+                        }
+
+                        if (kcpConnection.ConsumeKcpFragments(receivedAddress))
+                        {
+                            // TODO: don't (a)wait in this loop!
+                            await kcpConnection.StreamFlushAsync(cancellationToken);
+                        }
+                    }
+                    break;
             }
+        }
 
-            if (kcpConnection.ConsumeKcpFragments(receivedAddress))
-            {
-                await kcpConnection.StreamFlushAsync(cancellationToken);
-            }
+        static void SendHandshakeResponse(Socket socket, uint conversationId, SocketAddress clientAddress)
+        {
+            Span<byte> data = stackalloc byte[4];
+            MemoryMarshal.Write<uint>(data, conversationId);
+            socket.SendTo(data, SocketFlags.None, clientAddress);
         }
     }
 
     public void UpdateConnections()
     {
-        foreach (var connection in connections.Values)
+        var elapsed = Stopwatch.GetElapsedTime(startingTimestamp);
+        foreach (var connection in connections.Values) // TODO: Dictionary iteration is slow. need more.
         {
-            var ts = Stopwatch.GetTimestamp(); // TODO: NG.
-            connection.KcpUpdateTimestamp((uint)ts);
+            if (connection != null)
+            {
+                connection.KcpUpdateTimestamp((uint)elapsed.TotalMilliseconds);
+            }
         }
     }
 

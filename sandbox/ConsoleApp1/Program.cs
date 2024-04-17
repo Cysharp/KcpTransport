@@ -34,9 +34,12 @@ Thread.Sleep(100);
 var client1 = Task.Run(async () =>
 {
     //UdpSandbox.UdpHelloClient2();
-    var c1 = KcpSandbox.KcpEchoClient(1);
-    var c2 = KcpSandbox.KcpEchoClient(2);
-    await Task.WhenAll(c1, c2);
+    //var c1 = KcpSandbox.KcpEchoClient(1);
+    //await c1;
+    //var c2 = KcpSandbox.KcpEchoClient(2);
+    //await Task.WhenAll(c1, c2);
+    var c3 = KcpSandbox.KcpEchoClientUnreliable(3);
+    await c3;
 });
 //var client2 = Task.Run(() =>
 //{

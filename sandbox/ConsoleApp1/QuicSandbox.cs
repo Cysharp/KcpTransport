@@ -104,6 +104,8 @@ internal class QuicSandbox
             }
         };
 
+        // new QuicConnection
+
         // Initialize, configure and connect to the server.
         await using var connection = await QuicConnection.ConnectAsync(clientConnectionOptions);
 
@@ -119,6 +121,9 @@ internal class QuicSandbox
         {
             // Accept an inbound stream.
             var incomingStream = await connection.AcceptInboundStreamAsync();
+
+
+            
 
             // Work with the incoming stream ...
         }

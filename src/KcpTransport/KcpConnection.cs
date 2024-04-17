@@ -1,6 +1,10 @@
-﻿using KcpTransport.LowLevel;
+﻿#pragma warning disable CS8500
+
+using KcpTransport.LowLevel;
 using System;
+using System.Buffers;
 using System.Diagnostics;
+using System.Drawing;
 using System.IO.Pipelines;
 using System.Net;
 using System.Net.Sockets;
@@ -16,19 +20,18 @@ public class KcpConnection
     SocketAddress? remoteAddress;
     KcpStream stream;
     Socket socket;
+    readonly long startingTimestamp = Stopwatch.GetTimestamp();
 
     // create by User, for client connection
-    public unsafe KcpConnection(uint conversationId, IPEndPoint remoteAddress)
+    unsafe KcpConnection(Socket socket, uint conversationId)
     {
         this.kcp = ikcp_create(conversationId, this);
         this.kcp->output = KcpOutputCallback;
-        this.kcp->writelog = KcpWriteLog;
-        this.socket = new Socket(SocketType.Dgram, ProtocolType.Udp);
-        this.socket.Connect(remoteAddress); // TODO: connectasync?
+        // this.kcp->writelog = KcpWriteLog;
+        this.socket = socket;
         this.stream = new KcpStream(this);
 
-        StartSocketEventLoop(remoteAddress);
-
+        StartSocketEventLoop();
         UpdateTimestamp();
     }
 
@@ -37,7 +40,7 @@ public class KcpConnection
     {
         this.kcp = ikcp_create(conversationId, this);
         this.kcp->output = KcpOutputCallback;
-        this.kcp->writelog = KcpWriteLog;
+        // this.kcp->writelog = KcpWriteLog;
         this.remoteAddress = remoteAddress.Clone();
 
         // bind same port and connect client IP, this socket is used only for Send
@@ -51,7 +54,32 @@ public class KcpConnection
         UpdateTimestamp();
     }
 
-    async void StartSocketEventLoop(IPEndPoint remoteAddress, CancellationToken cancellationToken = default)
+    public static async ValueTask<KcpConnection> ConnectAsync(IPEndPoint remoteAddress, CancellationToken cancellationToken = default)
+    {
+        var socket = new Socket(SocketType.Dgram, ProtocolType.Udp);
+        await socket.ConnectAsync(remoteAddress, cancellationToken);
+
+        SendHandshakeRequest(socket);
+
+        // TODO: retry?
+        var initialWaitBuffer = new byte[4];
+        var received = await socket.ReceiveAsync(initialWaitBuffer);
+        if (received != 4) throw new Exception();
+
+        var conversationId = MemoryMarshal.Read<uint>(initialWaitBuffer);
+
+        var connection = new KcpConnection(socket, conversationId);
+        return connection;
+
+        static void SendHandshakeRequest(Socket socket)
+        {
+            Span<byte> data = stackalloc byte[4];
+            MemoryMarshal.Write(data, (uint)PacketType.Handshake);
+            socket.Send(data);
+        }
+    }
+
+    async void StartSocketEventLoop()
     {
         await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
 
@@ -61,7 +89,7 @@ public class KcpConnection
         while (true)
         {
             // Socket is datagram so received contains full block
-            var received = await socket.ReceiveAsync(socketBuffer, SocketFlags.None, cancellationToken);
+            var received = await socket.ReceiveAsync(socketBuffer, SocketFlags.None, CancellationToken.None);
             unsafe
             {
                 var socketBufferPointer = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(socketBuffer));
@@ -70,7 +98,7 @@ public class KcpConnection
 
             if (ConsumeKcpFragments(null))
             {
-                await stream.Writer.FlushAsync(cancellationToken);
+                await stream.Writer.FlushAsync(CancellationToken.None);
             }
         }
     }
@@ -122,10 +150,11 @@ public class KcpConnection
                 }
             }
         }
+
         return false;
     }
 
-    internal unsafe void SendBuffer(ReadOnlySpan<byte> buffer)
+    internal unsafe void SendReliableBuffer(ReadOnlySpan<byte> buffer)
     {
         fixed (byte* p = buffer)
         {
@@ -136,6 +165,31 @@ public class KcpConnection
         Flush();
     }
 
+    internal unsafe void SendUnreliableBuffer(ReadOnlySpan<byte> buffer)
+    {
+        // 8 byte header.
+        var packetLength = buffer.Length + 8;
+        var rent = ArrayPool<byte>.Shared.Rent(packetLength);
+        try
+        {
+            var span = rent.AsSpan();
+            MemoryMarshal.Write(span, (uint)PacketType.Unreliable);
+            MemoryMarshal.Write(span.Slice(4), kcp->conv);
+            buffer.CopyTo(span.Slice(8));
+
+            socket.Send(span.Slice(0, packetLength));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rent);
+        }
+    }
+
+    internal unsafe void WriteRawBuffer(ReadOnlySpan<byte> span)
+    {
+        stream.Writer.Write(span);
+    }
+
     internal unsafe void Flush()
     {
         ikcp_flush(kcp);
@@ -143,12 +197,13 @@ public class KcpConnection
 
     public unsafe void UpdateTimestamp()
     {
-        KcpUpdateTimestamp((uint)Stopwatch.GetTimestamp());
+        var elapsed = Stopwatch.GetElapsedTime(startingTimestamp);
+        KcpUpdateTimestamp((uint)elapsed.TotalMilliseconds);
     }
 
-    internal unsafe void KcpUpdateTimestamp(uint timestamp)
+    internal unsafe void KcpUpdateTimestamp(uint currentTimestampMillisec)
     {
-        ikcp_update(kcp, timestamp);
+        ikcp_update(kcp, currentTimestampMillisec);
     }
 
     static unsafe int KcpOutputCallback(byte* buf, int len, IKCPCB* kcp, object user)
