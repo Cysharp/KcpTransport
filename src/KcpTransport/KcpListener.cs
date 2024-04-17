@@ -89,14 +89,14 @@ public sealed class KcpListener : IDisposable
                     break;
                 case PacketType.Unreliable:
                     {
-                        conversationId = MemoryMarshal.Read<uint>(socketBuffer.AsSpan(4));
+                        conversationId = MemoryMarshal.Read<uint>(socketBuffer.AsSpan(4, received - 4));
                         if (!connections.TryGetValue(conversationId, out var kcpConnection))
                         {
                             // may incoming old packet, TODO: log it.
                             continue;
                         }
 
-                        kcpConnection.WriteRawBuffer(socketBuffer.AsSpan(8));
+                        kcpConnection.WriteRawBuffer(socketBuffer.AsSpan(8, received - 8));
                         await kcpConnection.StreamFlushAsync(cancellationToken);
                     }
                     break;

@@ -43,7 +43,9 @@ internal class KcpSandbox
         var stream = await connection.OpenOutboundStreamAsync();
         while (true)
         {
-            var inputText = Console.ReadLine();
+            // var inputText = Console.ReadLine();
+            var inputText = Random.Shared.Next().ToString();
+
             await stream.WriteAsync(Encoding.UTF8.GetBytes(inputText!));
 
             var len = await stream.ReadAsync(buffer);
@@ -61,7 +63,8 @@ internal class KcpSandbox
         var stream = await connection.OpenOutboundStreamAsync();
         while (true)
         {
-            var inputText = Console.ReadLine();
+            // var inputText = Console.ReadLine();
+            var inputText = Random.Shared.Next().ToString();
             await stream.WriteUnreliableAsync(Encoding.UTF8.GetBytes(inputText!));
 
             var len = await stream.ReadAsync(buffer);
