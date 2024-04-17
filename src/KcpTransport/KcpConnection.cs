@@ -1,6 +1,7 @@
 ﻿using KcpTransport.LowLevel;
 using System;
 using System.Diagnostics;
+using System.IO.Pipelines;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
@@ -12,47 +13,37 @@ namespace KcpTransport;
 public class KcpConnection
 {
     unsafe IKCPCB* kcp;
-    //SocketAddress? remoteAddress;
-    IPEndPoint? remoteAddress;
-    bool connected;
+    SocketAddress? remoteAddress;
     KcpStream stream;
     Socket socket;
 
-    public unsafe KcpConnection(uint conversationId, IPEndPoint remoteAddress, bool connect = true)
+    // create by User, for client connection
+    public unsafe KcpConnection(uint conversationId, IPEndPoint remoteAddress)
     {
         this.kcp = ikcp_create(conversationId, this);
         this.kcp->output = KcpOutputCallback;
         this.socket = new Socket(SocketType.Dgram, ProtocolType.Udp);
-        if (connect)
-        {
-            this.socket.Connect(remoteAddress); // TODO: connectasync?
-            StartSocketEventLoop(remoteAddress);
-        }
-        this.connected = connect;
-        this.remoteAddress = remoteAddress;
+        this.socket.Connect(remoteAddress); // TODO: connectasync?
         this.stream = new KcpStream(this);
+
+        StartSocketEventLoop(remoteAddress);
 
         UpdateTimestamp();
     }
 
-    public unsafe KcpConnection(uint conversationId, IPEndPoint remoteAddress, Socket socket) // TODO: thread non-safe
+    // create from Listerner for server connection
+    internal unsafe KcpConnection(uint conversationId, IPEndPoint serverEndPoint, SocketAddress remoteAddress)
     {
         this.kcp = ikcp_create(conversationId, this);
         this.kcp->output = KcpOutputCallback;
-        this.socket = socket;
-        this.connected = false;
-        this.remoteAddress = remoteAddress;
-        this.stream = new KcpStream(this);
+        this.remoteAddress = remoteAddress.Clone();
 
-        UpdateTimestamp();
-    }
-
-    internal unsafe KcpConnection(uint conversationId, SocketAddress remoteAddress)
-    {
-        this.kcp = ikcp_create(conversationId, this);
-        this.kcp->output = KcpOutputCallback;
-        // this.remoteAddress = CloneSocketAddress(remoteAddress); // TODO: currently cloned address slows exception when SendTo
+        // bind same port and connect client IP, this socket is used only for Send
         this.socket = new Socket(SocketType.Dgram, ProtocolType.Udp);
+        this.socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        this.socket.Bind(serverEndPoint);
+        this.socket.Connect(remoteAddress.ToIPEndPoint());
+
         this.stream = new KcpStream(this);
 
         UpdateTimestamp();
@@ -68,16 +59,23 @@ public class KcpConnection
         while (true)
         {
             // Socket is datagram so received contains full block
-            // var received = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, receivedAddress, cancellationToken);
-            var received = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, remoteAddress, cancellationToken);
+            var received = await socket.ReceiveAsync(socketBuffer, SocketFlags.None, cancellationToken);
             unsafe
             {
                 var socketBufferPointer = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(socketBuffer));
+                InputReceivedBuffer(socketBufferPointer, received);
+            }
 
-                InputReceivedBuffer(socketBufferPointer, received.ReceivedBytes);
-                ConsumeKcpFragments((IPEndPoint)received.RemoteEndPoint);
+            if (ConsumeKcpFragments(null))
+            {
+                await stream.Writer.FlushAsync(cancellationToken);
             }
         }
+    }
+
+    internal ValueTask<FlushResult> StreamFlushAsync(CancellationToken cancellationToken)
+    {
+        return stream.Writer.FlushAsync(cancellationToken);
     }
 
     public ValueTask<KcpStream> OpenOutboundStreamAsync()
@@ -99,30 +97,30 @@ public class KcpConnection
         }
     }
 
-    internal unsafe void ConsumeKcpFragments(IPEndPoint remoteAddress)
+    internal unsafe bool ConsumeKcpFragments(SocketAddress? remoteAddress)
     {
         var size = ikcp_peeksize(kcp);
         if (size > 0)
         {
-            //if (!connected && !this.remoteAddress!.Equals(remoteAddress))
+            if (remoteAddress != null && !remoteAddress.Equals(this.remoteAddress))
             {
-                // swap latest address(TODO: sercurity?)
-                // this.remoteAddress = CloneSocketAddress(remoteAddress);
+                // TODO: shutdown existing socket and create new one?
             }
-            this.remoteAddress = remoteAddress; // TODO: swap... 
 
-            var buffer = stream.GetSpan(size); // TODO: lock?
+            var writer = stream.Writer;
+            var buffer = writer.GetSpan(size);
 
             fixed (byte* p = buffer)
             {
                 var len = ikcp_recv(kcp, p, buffer.Length);
                 if (len > 0)
                 {
-                    stream.Advance(len);
-                    stream.WriterFlush();
+                    writer.Advance(len);
+                    return true;
                 }
             }
         }
+        return false;
     }
 
     internal unsafe void SendBuffer(ReadOnlySpan<byte> buffer)
@@ -151,27 +149,12 @@ public class KcpConnection
         ikcp_update(kcp, timestamp);
     }
 
-    static SocketAddress CloneSocketAddress(SocketAddress socketAddress)
-    {
-        var clone = new SocketAddress(socketAddress.Family, socketAddress.Size);
-        socketAddress.Buffer.CopyTo(clone.Buffer);
-        return clone;
-    }
-
     static unsafe int KcpOutputCallback(byte* buf, int len, IKCPCB* kcp, object user)
     {
         var self = (KcpConnection)user;
         var buffer = new Span<byte>(buf, len);
 
-        int sent;
-        if (self.connected)
-        {
-            sent = self.socket.Send(buffer);
-        }
-        else
-        {
-            sent = self.socket.SendTo(buffer, SocketFlags.None, self.remoteAddress!);
-        }
+        var sent = self.socket.Send(buffer);
         return sent;
     }
 }

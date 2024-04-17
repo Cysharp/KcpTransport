@@ -83,6 +83,59 @@ namespace ConsoleApp1
             }
         }
 
+
+        public static void UdpHelloServer3()
+        {
+            const int listenPort = 11000;
+            const int bufferSize = 1024;
+
+            using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            socket.Bind(new IPEndPoint(IPAddress.Any, listenPort));
+
+            Console.WriteLine("UDP server started. Waiting for a message...");
+
+            var remoteAddress = new SocketAddress(AddressFamily.InterNetwork);
+
+            Socket? clientSocket = null;
+
+            while (true)
+            {
+                byte[] data = new byte[bufferSize];
+                int receivedBytes = socket.ReceiveFrom(data, SocketFlags.None, remoteAddress);
+
+                if (clientSocket == null)
+                {
+                    clientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                    clientSocket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                    clientSocket.Bind(new IPEndPoint(IPAddress.Any, listenPort));
+
+                    IPEndPoint endpoint = new IPEndPoint(0, 0);
+                    IPEndPoint clonedIPEndPoint = (IPEndPoint)endpoint.Create(remoteAddress);
+                    clientSocket.Connect(clonedIPEndPoint);
+                }
+
+                string message = Encoding.ASCII.GetString(data, 0, receivedBytes);
+
+                Console.WriteLine($"Received message from {remoteAddress}: {message}");
+
+                string response = $"Server received your message: {message}";
+                byte[] responseData = Encoding.ASCII.GetBytes(response);
+                //clientSocket.Send(responseData, SocketFlags.None);
+
+                clientSocket.SendTo(responseData, SocketFlags.None, remoteAddress);
+            }
+        }
+
+
+
+
+
+
+
+
+
+
         public static void UdpHelloClient()
         {
             const string serverIP = "127.0.0.1";
@@ -139,19 +192,19 @@ namespace ConsoleApp1
             }
         }
 
-        public static void UdpHelloServer3()
-        {
-            using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
-            socket.Bind(new IPEndPoint(IPAddress.Any, 12345));
+        //public static void UdpHelloServer3()
+        //{
+        //    using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        //    socket.Bind(new IPEndPoint(IPAddress.Any, 12345));
 
-            var remoteAddress = new SocketAddress(AddressFamily.InterNetwork);
+        //    var remoteAddress = new SocketAddress(AddressFamily.InterNetwork);
 
-            ReadOnlyMemory<byte> message1 = Encoding.ASCII.GetBytes("hello");
-            ReadOnlyMemory<byte> message2 = Encoding.ASCII.GetBytes("world");
+        //    ReadOnlyMemory<byte> message1 = Encoding.ASCII.GetBytes("hello");
+        //    ReadOnlyMemory<byte> message2 = Encoding.ASCII.GetBytes("world");
 
-            Span<int> lengths = stackalloc int[2];
-            // var len = socket.SendTo([message1, message2], lengths, SocketFlags.None, remoteAddress);
-        }
+        //    Span<int> lengths = stackalloc int[2];
+        //    // var len = socket.SendTo([message1, message2], lengths, SocketFlags.None, remoteAddress);
+        //}
     }
 }
 

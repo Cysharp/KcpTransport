@@ -5,7 +5,6 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
-using static KcpTransport.LowLevel.KcpMethods;
 
 namespace KcpTransport;
 
@@ -24,9 +23,12 @@ public sealed class KcpListener : IDisposable
     KcpListener(int listenPort)
     {
         Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true); // in Linux, as SO_REUSEPORT
+
+        var endPoint = new IPEndPoint(IPAddress.Any, listenPort);
         try
         {
-            socket.Bind(new IPEndPoint(IPAddress.Any, listenPort));
+            socket.Bind(endPoint);
         }
         catch
         {
@@ -40,7 +42,7 @@ public sealed class KcpListener : IDisposable
             SingleWriter = true
         });
 
-        this.StartSocketEventLoop();
+        this.StartSocketEventLoop(endPoint);
     }
 
     public ValueTask<KcpConnection> AcceptConnectionAsync(CancellationToken cancellationToken = default)
@@ -48,12 +50,11 @@ public sealed class KcpListener : IDisposable
         return acceptQueue.Reader.ReadAsync(cancellationToken);
     }
 
-    async void StartSocketEventLoop(CancellationToken cancellationToken = default)
+    async void StartSocketEventLoop(IPEndPoint serverEndPoint, CancellationToken cancellationToken = default)
     {
         await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
 
         var receivedAddress = new SocketAddress(AddressFamily.InterNetwork);
-        var receivedAddress2 = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 0); // TODO:use Socketaddress
 
         // TODO: mtu size
         var socketBuffer = GC.AllocateUninitializedArray<byte>(1500, pinned: true); // Create to pinned object heap
@@ -62,22 +63,27 @@ public sealed class KcpListener : IDisposable
         {
             // Socket is datagram so received contains full block
             // var received = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, receivedAddress, cancellationToken);
-            var received = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, receivedAddress2, cancellationToken);
+            var received = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, receivedAddress, cancellationToken);
+            KcpConnection? kcpConnection;
             unsafe
             {
                 var socketBufferPointer = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(socketBuffer));
+                // peek kcp data, simply first 4 byte is conversation id
+                var conversationId = MemoryMarshal.Read<uint>(socketBuffer);
 
-                // TODO: use MemoryMarshal.Read<uint>, simply first 4 byte is conversation id
-                var conversationId = ikcp_getconv(socketBufferPointer);
-                if (!connections.TryGetValue(conversationId, out var kcpConnection))
+                if (!connections.TryGetValue(conversationId, out kcpConnection))
                 {
-                    kcpConnection = new KcpConnection(conversationId, receivedAddress2, socket);
+                    kcpConnection = new KcpConnection(conversationId, serverEndPoint, receivedAddress);
                     connections[conversationId] = kcpConnection;
                     acceptQueue.Writer.TryWrite(kcpConnection);
                 }
 
-                if (!kcpConnection.InputReceivedBuffer(socketBufferPointer, received.ReceivedBytes)) continue;
-                kcpConnection.ConsumeKcpFragments((IPEndPoint)received.RemoteEndPoint);
+                if (!kcpConnection.InputReceivedBuffer(socketBufferPointer, received)) continue;
+            }
+
+            if (kcpConnection.ConsumeKcpFragments(receivedAddress))
+            {
+                await kcpConnection.StreamFlushAsync(cancellationToken);
             }
         }
     }
@@ -86,7 +92,7 @@ public sealed class KcpListener : IDisposable
     {
         foreach (var connection in connections.Values)
         {
-            var ts = Stopwatch.GetTimestamp();
+            var ts = Stopwatch.GetTimestamp(); // TODO: NG.
             connection.KcpUpdateTimestamp((uint)ts);
         }
     }

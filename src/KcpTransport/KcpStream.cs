@@ -5,39 +5,19 @@ using System.IO.Pipelines;
 
 namespace KcpTransport;
 
-public sealed unsafe class KcpStream : Stream, IBufferWriter<byte>
+public sealed unsafe class KcpStream : Stream
 {
     KcpConnection connection;
     Pipe pipe;
     Stream pipeReaderStream;
+
+    internal PipeWriter Writer => pipe.Writer;
 
     internal KcpStream(KcpConnection connection)
     {
         this.connection = connection;
         this.pipe = new Pipe();
         this.pipeReaderStream = pipe.Reader.AsStream();
-    }
-
-    // IBufferWriter
-
-    public void Advance(int count)
-    {
-        pipe.Writer.Advance(count);
-    }
-
-    public Memory<byte> GetMemory(int sizeHint = 0)
-    {
-        return pipe.Writer.GetMemory(sizeHint);
-    }
-
-    public Span<byte> GetSpan(int sizeHint = 0)
-    {
-        return pipe.Writer.GetSpan(sizeHint);
-    }
-
-    internal void WriterFlush()
-    {
-        _ = pipe.Writer.FlushAsync(); // TODO: async?
     }
 
     public override int Read(byte[] buffer, int offset, int count)

@@ -35,7 +35,7 @@ internal class KcpSandbox
         }
     }
 
-    public static async Task KcpEchoClient()
+    public static async Task KcpEchoClient(int id)
     {
         // TODO: issue conversation id from client to server.
         var conversationId = unchecked((uint)Random.Shared.Next(0, int.MaxValue));
@@ -52,7 +52,7 @@ internal class KcpSandbox
             var len = await stream.ReadAsync(buffer);
 
             var str = Encoding.UTF8.GetString(buffer, 0, len);
-            Console.WriteLine("Client Received: " + str);
+            Console.WriteLine($"Client{id} Received: " + str);
         }
     }
 }

@@ -25,16 +25,18 @@ using System.Diagnostics;
 
 var server = Task.Run(async () =>
 {
-    UdpSandbox.UdpHelloServer();
-    //await KcpSandbox.KcpEchoServer();
+    //UdpSandbox.UdpHelloServer3();
+    await KcpSandbox.KcpEchoServer();
 });
 
 Thread.Sleep(100);
 
 var client1 = Task.Run(async () =>
 {
-    UdpSandbox.UdpHelloClient2();
-    //await KcpSandbox.KcpEchoClient();
+    //UdpSandbox.UdpHelloClient2();
+    var c1 = KcpSandbox.KcpEchoClient(1);
+    var c2 = KcpSandbox.KcpEchoClient(2);
+    await Task.WhenAll(c1, c2);
 });
 //var client2 = Task.Run(() =>
 //{
