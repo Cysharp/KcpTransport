@@ -22,6 +22,7 @@ public class KcpConnection
     {
         this.kcp = ikcp_create(conversationId, this);
         this.kcp->output = KcpOutputCallback;
+        this.kcp->writelog = KcpWriteLog;
         this.socket = new Socket(SocketType.Dgram, ProtocolType.Udp);
         this.socket.Connect(remoteAddress); // TODO: connectasync?
         this.stream = new KcpStream(this);
@@ -36,6 +37,7 @@ public class KcpConnection
     {
         this.kcp = ikcp_create(conversationId, this);
         this.kcp->output = KcpOutputCallback;
+        this.kcp->writelog = KcpWriteLog;
         this.remoteAddress = remoteAddress.Clone();
 
         // bind same port and connect client IP, this socket is used only for Send
@@ -156,5 +158,10 @@ public class KcpConnection
 
         var sent = self.socket.Send(buffer);
         return sent;
+    }
+
+    static unsafe void KcpWriteLog(string msg, IKCPCB* kcp, object user)
+    {
+        Console.WriteLine(msg);
     }
 }

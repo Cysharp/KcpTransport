@@ -107,9 +107,7 @@ public unsafe struct IKCPSEG
 
 // void* user -> object user
 public unsafe delegate int output_callback(byte* buf, int len, IKCPCB* kcp, object user);
-
-[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-public unsafe delegate void writelog_callback(byte* log, IKCPCB* kcp, void* user);
+public unsafe delegate void writelog_callback(string msg, IKCPCB* kcp, object user);
 
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct IKCPCB

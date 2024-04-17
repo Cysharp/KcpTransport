@@ -1,6 +1,7 @@
 ﻿#pragma warning disable CS8500
 #pragma warning disable CS8981
 
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using static KcpTransport.LowLevel.CMethods;
 using static KcpTransport.LowLevel.IQUEUEHEAD;
@@ -208,6 +209,34 @@ public static unsafe class KcpMethods
     //    kcp->writelog(buffer, kcp, kcp->user);
     //}
 
+    [Conditional("DEBUG")]
+    static void ikcp_log(ikcpcb* kcp, string msg)
+    {
+        if (kcp->writelog == null) return;
+        kcp->writelog(msg, kcp, kcp->user);
+    }
+
+    [Conditional("DEBUG")]
+    static void ikcp_log<T1>(ikcpcb* kcp, string format, T1 arg1)
+    {
+        if (kcp->writelog == null) return;
+        kcp->writelog(string.Format(format, arg1), kcp, kcp->user);
+    }
+
+    [Conditional("DEBUG")]
+    static void ikcp_log<T1, T2>(ikcpcb* kcp, string format, T1 arg1, T2 arg2)
+    {
+        if (kcp->writelog == null) return;
+        kcp->writelog(string.Format(format, arg1, arg2), kcp, kcp->user);
+    }
+
+    [Conditional("DEBUG")]
+    static void ikcp_log<T1, T2, T3>(ikcpcb* kcp, string format, T1 arg1, T2 arg2, T3 arg3)
+    {
+        if (kcp->writelog == null) return;
+        kcp->writelog(string.Format(format, arg1, arg2, arg3), kcp, kcp->user);
+    }
+
     // check log mask
     //static int ikcp_canlog(const ikcpcb* kcp, int mask)
     //{
@@ -224,6 +253,7 @@ public static unsafe class KcpMethods
         //{
         //    ikcp_log(kcp, IKCP_LOG_OUTPUT, "[RO] %ld bytes", (long)size);
         //}
+        ikcp_log(kcp, "[RO] {0} bytes", (long)size);
         if (size == 0) return 0;
         return kcp->output((byte*)data, size, kcp, kcp->user);
     }
@@ -417,10 +447,7 @@ public static unsafe class KcpMethods
             len += (int)seg->len;
             fragment = (int)seg->frg;
 
-            //if (ikcp_canlog(kcp, IKCP_LOG_RECV))
-            //{
-            //    // ikcp_log(kcp, IKCP_LOG_RECV, "recv sn=%lu", (unsigned long)seg->sn);
-            //}
+            ikcp_log(kcp, "recv sn={0}", seg->sn);
 
             if (ispeek == 0)
             {
@@ -835,6 +862,7 @@ public static unsafe class KcpMethods
         //{
         //    ikcp_log(kcp, IKCP_LOG_INPUT, "[RI] %d bytes", (int)size);
         //}
+        ikcp_log(kcp, "[RI] {0} bytes", (int)size);
 
         if (data == null || (int)size < (int)IKCP_OVERHEAD) return -1;
 
@@ -907,6 +935,9 @@ public static unsafe class KcpMethods
                 //(long)_itimediff(kcp->current, ts),
                 //(long)kcp->rx_rto);
                 //           }
+
+                ikcp_log(kcp, "input ack: sn={0} rtt={1} rto={2}", sn, (long)_itimediff(kcp->current, ts), (long)kcp->rx_rto);
+
             }
             else if (cmd == IKCP_CMD_PUSH)
             {
@@ -915,6 +946,7 @@ public static unsafe class KcpMethods
                 //    ikcp_log(kcp, IKCP_LOG_IN_DATA,
                 //        "input psh: sn=%lu ts=%lu", (unsigned long)sn, (unsigned long)ts);
                 //}
+                ikcp_log(kcp, "input psh: sn={0} ts={1}", sn, ts);
                 if (_itimediff(sn, kcp->rcv_nxt + kcp->rcv_wnd) < 0)
                 {
                     ikcp_ack_push(kcp, sn, ts);
@@ -948,6 +980,7 @@ public static unsafe class KcpMethods
                 //{
                 //    ikcp_log(kcp, IKCP_LOG_IN_PROBE, "input probe");
                 //}
+                ikcp_log(kcp, "input probe");
             }
             else if (cmd == IKCP_CMD_WINS)
             {
@@ -957,6 +990,7 @@ public static unsafe class KcpMethods
                 //    ikcp_log(kcp, IKCP_LOG_IN_WINS,
                 //        "input wins: %lu", (unsigned long)(wnd));
                 //}
+                ikcp_log(kcp, "input wins: {0}", (wnd));
             }
             else
             {
