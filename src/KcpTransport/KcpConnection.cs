@@ -25,8 +25,8 @@ public class KcpConnection
     // create by User, for client connection
     unsafe KcpConnection(Socket socket, uint conversationId)
     {
-        this.kcp = ikcp_create(conversationId, this);
-        this.kcp->output = KcpOutputCallback;
+        this.kcp = ikcp_create(conversationId);
+        this.kcp->output = &KcpOutputCallback;
         // this.kcp->writelog = KcpWriteLog;
         this.socket = socket;
         this.stream = new KcpStream(this);
@@ -38,8 +38,8 @@ public class KcpConnection
     // create from Listerner for server connection
     internal unsafe KcpConnection(uint conversationId, IPEndPoint serverEndPoint, SocketAddress remoteAddress)
     {
-        this.kcp = ikcp_create(conversationId, this);
-        this.kcp->output = KcpOutputCallback;
+        this.kcp = ikcp_create(conversationId);
+        this.kcp->output = &KcpOutputCallback;
         // this.kcp->writelog = KcpWriteLog;
         this.remoteAddress = remoteAddress.Clone();
 
@@ -192,7 +192,7 @@ public class KcpConnection
 
     internal unsafe void Flush()
     {
-        ikcp_flush(kcp);
+        ikcp_flush(kcp, this);
     }
 
     public unsafe void UpdateTimestamp()
@@ -203,7 +203,7 @@ public class KcpConnection
 
     internal unsafe void KcpUpdateTimestamp(uint currentTimestampMillisec)
     {
-        ikcp_update(kcp, currentTimestampMillisec);
+        ikcp_update(kcp, currentTimestampMillisec, this);
     }
 
     static unsafe int KcpOutputCallback(byte* buf, int len, IKCPCB* kcp, object user)

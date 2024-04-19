@@ -1,5 +1,4 @@
-﻿#pragma warning disable CS8500
-#pragma warning disable CS8981
+﻿#pragma warning disable CS8981
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -105,10 +104,6 @@ public unsafe struct IKCPSEG
     public fixed byte data[1]; // body, flexible array member
 };
 
-// void* user -> object user
-public unsafe delegate int output_callback(byte* buf, int len, IKCPCB* kcp, object user);
-public unsafe delegate void writelog_callback(string msg, IKCPCB* kcp, object user);
-
 [StructLayout(LayoutKind.Sequential)]
 public unsafe struct IKCPCB
 {
@@ -130,15 +125,17 @@ public unsafe struct IKCPCB
     public IUINT32* acklist;
     public IUINT32 ackcount;
     public IUINT32 ackblock;
-    public object user; // void* -> object
+    // public object user; // avoid store managed object
     public byte* buffer;
     public int fastresend;
     public int fastlimit;
     public int nocwnd, stream;
     public int logmask;
 
-    public output_callback output;
-    public writelog_callback writelog;
+    public delegate* managed<byte*, int, IKCPCB*, object, int> output; // pass user in argument
+    public delegate* managed<string, IKCPCB*, void> writelog;
+    //public output_callback output;
+    //public writelog_callback writelog;
 };
 
 internal static class KcpConfigurations

@@ -1,5 +1,4 @@
-﻿#pragma warning disable CS8500
-#pragma warning disable CS8981
+﻿#pragma warning disable CS8981
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
@@ -213,28 +212,28 @@ public static unsafe class KcpMethods
     static void ikcp_log(ikcpcb* kcp, string msg)
     {
         if (kcp->writelog == null) return;
-        kcp->writelog(msg, kcp, kcp->user);
+        kcp->writelog(msg, kcp);
     }
 
     [Conditional("DEBUG")]
     static void ikcp_log<T1>(ikcpcb* kcp, string format, T1 arg1)
     {
         if (kcp->writelog == null) return;
-        kcp->writelog(string.Format(format, arg1), kcp, kcp->user);
+        kcp->writelog(string.Format(format, arg1), kcp);
     }
 
     [Conditional("DEBUG")]
     static void ikcp_log<T1, T2>(ikcpcb* kcp, string format, T1 arg1, T2 arg2)
     {
         if (kcp->writelog == null) return;
-        kcp->writelog(string.Format(format, arg1, arg2), kcp, kcp->user);
+        kcp->writelog(string.Format(format, arg1, arg2), kcp);
     }
 
     [Conditional("DEBUG")]
     static void ikcp_log<T1, T2, T3>(ikcpcb* kcp, string format, T1 arg1, T2 arg2, T3 arg3)
     {
         if (kcp->writelog == null) return;
-        kcp->writelog(string.Format(format, arg1, arg2, arg3), kcp, kcp->user);
+        kcp->writelog(string.Format(format, arg1, arg2, arg3), kcp);
     }
 
     // check log mask
@@ -245,17 +244,17 @@ public static unsafe class KcpMethods
     //}
 
     // output segment
-    static int ikcp_output(ikcpcb* kcp, void* data, int size)
+    static int ikcp_output(ikcpcb* kcp, void* data, int size, object user)
     {
         assert(kcp);
-        assert(kcp->output);
+        // assert(kcp->output);
         //if (ikcp_canlog(kcp, IKCP_LOG_OUTPUT))
         //{
         //    ikcp_log(kcp, IKCP_LOG_OUTPUT, "[RO] %ld bytes", (long)size);
         //}
         ikcp_log(kcp, "[RO] {0} bytes", (long)size);
         if (size == 0) return 0;
-        return kcp->output((byte*)data, size, kcp, kcp->user);
+        return kcp->output((byte*)data, size, kcp, user);
     }
 
     // output queue
@@ -276,13 +275,13 @@ public static unsafe class KcpMethods
     //---------------------------------------------------------------------
     // create a new kcpcb
     //---------------------------------------------------------------------
-    public static ikcpcb* ikcp_create(IUINT32 conv, object user) // Modify: void* user -> object user
+    public static ikcpcb* ikcp_create(IUINT32 conv)
     {
         ikcpcb* kcp = (ikcpcb*)ikcp_malloc(sizeof(ikcpcb));
 
         if (kcp == null) return null;
         kcp->conv = conv;
-        kcp->user = user;
+        // kcp->user = user;
         kcp->snd_una = 0;
         kcp->snd_nxt = 0;
         kcp->rcv_nxt = 0;
@@ -399,10 +398,10 @@ public static unsafe class KcpMethods
     //---------------------------------------------------------------------
     // set output callback, which will be invoked by kcp
     //---------------------------------------------------------------------
-    public static void ikcp_setoutput(ikcpcb* kcp, output_callback output)
-    {
-        kcp->output = output;
-    }
+    //public static void ikcp_setoutput(ikcpcb* kcp, output_callback output)
+    //{
+    //    kcp->output = output;
+    //}
 
 
     //---------------------------------------------------------------------
@@ -1070,7 +1069,7 @@ public static unsafe class KcpMethods
     //---------------------------------------------------------------------
     // ikcp_flush
     //---------------------------------------------------------------------
-    public static void ikcp_flush(ikcpcb* kcp)
+    public static void ikcp_flush(ikcpcb* kcp, object user)
     {
         IUINT32 current = kcp->current;
         byte* buffer = kcp->buffer;
@@ -1103,7 +1102,7 @@ public static unsafe class KcpMethods
             size = (int)(ptr - buffer);
             if (size + (int)IKCP_OVERHEAD > (int)kcp->mtu)
             {
-                ikcp_output(kcp, buffer, size);
+                ikcp_output(kcp, buffer, size, user);
                 ptr = buffer;
             }
             ikcp_ack_get(kcp, i, &seg.sn, &seg.ts);
@@ -1147,7 +1146,7 @@ public static unsafe class KcpMethods
             size = (int)(ptr - buffer);
             if (size + (int)IKCP_OVERHEAD > (int)kcp->mtu)
             {
-                ikcp_output(kcp, buffer, size);
+                ikcp_output(kcp, buffer, size, user);
                 ptr = buffer;
             }
             ptr = ikcp_encode_seg(ptr, &seg);
@@ -1160,7 +1159,7 @@ public static unsafe class KcpMethods
             size = (int)(ptr - buffer);
             if (size + (int)IKCP_OVERHEAD > (int)kcp->mtu)
             {
-                ikcp_output(kcp, buffer, size);
+                ikcp_output(kcp, buffer, size, user);
                 ptr = buffer;
             }
             ptr = ikcp_encode_seg(ptr, &seg);
@@ -1255,7 +1254,7 @@ public static unsafe class KcpMethods
 
                 if (size + need > (int)kcp->mtu)
                 {
-                    ikcp_output(kcp, buffer, size);
+                    ikcp_output(kcp, buffer, size, user);
                     ptr = buffer;
                 }
 
@@ -1278,7 +1277,7 @@ public static unsafe class KcpMethods
         size = (int)(ptr - buffer);
         if (size > 0)
         {
-            ikcp_output(kcp, buffer, size);
+            ikcp_output(kcp, buffer, size, user);
         }
 
         // update ssthresh
@@ -1314,7 +1313,7 @@ public static unsafe class KcpMethods
     // ikcp_check when to call it again (without ikcp_input/_send calling).
     // 'current' - current timestamp in millisec. 
     //---------------------------------------------------------------------
-    public static void ikcp_update(ikcpcb* kcp, IUINT32 current)
+    public static void ikcp_update(ikcpcb* kcp, IUINT32 current, object user)
     {
         IINT32 slap;
 
@@ -1341,7 +1340,7 @@ public static unsafe class KcpMethods
             {
                 kcp->ts_flush = kcp->current + kcp->interval;
             }
-            ikcp_flush(kcp);
+            ikcp_flush(kcp, user);
         }
     }
 
