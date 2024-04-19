@@ -10,6 +10,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
 using static KcpTransport.LowLevel.KcpMethods;
 
 namespace KcpTransport;
@@ -27,12 +28,14 @@ public class KcpConnection
     {
         this.kcp = ikcp_create(conversationId);
         this.kcp->output = &KcpOutputCallback;
+        ikcp_nodelay(kcp, 1, 10, 2, 1); // TODO: nodelay config
         // this.kcp->writelog = KcpWriteLog;
         this.socket = socket;
         this.stream = new KcpStream(this);
 
         StartSocketEventLoop();
         UpdateTimestamp();
+        UpdateLoop();
     }
 
     // create from Listerner for server connection
@@ -40,6 +43,7 @@ public class KcpConnection
     {
         this.kcp = ikcp_create(conversationId);
         this.kcp->output = &KcpOutputCallback;
+        ikcp_nodelay(kcp, 1, 10, 2, 1);
         // this.kcp->writelog = KcpWriteLog;
         this.remoteAddress = remoteAddress.Clone();
 
@@ -52,6 +56,16 @@ public class KcpConnection
         this.stream = new KcpStream(this);
 
         UpdateTimestamp();
+        UpdateLoop();
+    }
+
+    async void UpdateLoop()
+    {
+        var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(10));
+        while (await timer.WaitForNextTickAsync())
+        {
+            UpdateTimestamp();
+        }
     }
 
     public static async ValueTask<KcpConnection> ConnectAsync(IPEndPoint remoteAddress, CancellationToken cancellationToken = default)
@@ -90,15 +104,40 @@ public class KcpConnection
         {
             // Socket is datagram so received contains full block
             var received = await socket.ReceiveAsync(socketBuffer, SocketFlags.None, CancellationToken.None);
-            unsafe
-            {
-                var socketBufferPointer = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(socketBuffer));
-                InputReceivedBuffer(socketBufferPointer, received);
-            }
 
-            if (ConsumeKcpFragments(null))
+            var conversationId = MemoryMarshal.Read<uint>(socketBuffer.AsSpan(0, received));
+            var packetType = (PacketType)conversationId;
+            switch (packetType)
             {
-                await stream.Writer.FlushAsync(CancellationToken.None);
+                case PacketType.Unreliable:
+                    {
+                        conversationId = MemoryMarshal.Read<uint>(socketBuffer.AsSpan(4, received - 4));
+                        WriteRawBuffer(socketBuffer.AsSpan(8, received - 8));
+                        await stream.Writer.FlushAsync(CancellationToken.None);
+                    }
+                    break;
+                default:
+                    {
+                        // Reliable
+                        if (conversationId < 100)
+                        {
+                            // may incoming invalid packet, TODO: log it.
+                            continue;
+                        }
+
+                        unsafe
+                        {
+                            var socketBufferPointer = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(socketBuffer));
+                            if (!InputReceivedBuffer(socketBufferPointer, received)) continue;
+                        }
+
+                        if (ConsumeKcpFragments(null))
+                        {
+                            // TODO: don't (a)wait in this loop!
+                            await stream.Writer.FlushAsync(CancellationToken.None);
+                        }
+                    }
+                    break;
             }
         }
     }
@@ -115,38 +154,44 @@ public class KcpConnection
 
     internal unsafe bool InputReceivedBuffer(byte* buffer, int length)
     {
-        var inputResult = ikcp_input(kcp, buffer, length);
-        if (inputResult == 0)
+        lock (this)
         {
-            return true;
-        }
-        else
-        {
-            // TODO: log
-            return false;
+            var inputResult = ikcp_input(kcp, buffer, length);
+            if (inputResult == 0)
+            {
+                return true;
+            }
+            else
+            {
+                // TODO: log
+                return false;
+            }
         }
     }
 
     internal unsafe bool ConsumeKcpFragments(SocketAddress? remoteAddress)
     {
-        var size = ikcp_peeksize(kcp);
-        if (size > 0)
+        lock (this)
         {
-            if (remoteAddress != null && !remoteAddress.Equals(this.remoteAddress))
+            var size = ikcp_peeksize(kcp);
+            if (size > 0)
             {
-                // TODO: shutdown existing socket and create new one?
-            }
-
-            var writer = stream.Writer;
-            var buffer = writer.GetSpan(size);
-
-            fixed (byte* p = buffer)
-            {
-                var len = ikcp_recv(kcp, p, buffer.Length);
-                if (len > 0)
+                if (remoteAddress != null && !remoteAddress.Equals(this.remoteAddress))
                 {
-                    writer.Advance(len);
-                    return true;
+                    // TODO: shutdown existing socket and create new one?
+                }
+
+                var writer = stream.Writer;
+                var buffer = writer.GetSpan(size);
+
+                fixed (byte* p = buffer)
+                {
+                    var len = ikcp_recv(kcp, p, buffer.Length);
+                    if (len > 0)
+                    {
+                        writer.Advance(len);
+                        return true;
+                    }
                 }
             }
         }
@@ -158,7 +203,10 @@ public class KcpConnection
     {
         fixed (byte* p = buffer)
         {
-            ikcp_send(kcp, p, buffer.Length);
+            lock (this)
+            {
+                ikcp_send(kcp, p, buffer.Length);
+            }
         }
 
         // TODO: auto flush?
@@ -192,7 +240,10 @@ public class KcpConnection
 
     internal unsafe void Flush()
     {
-        ikcp_flush(kcp, this);
+        lock (this)
+        {
+            ikcp_flush(kcp, this);
+        }
     }
 
     public unsafe void UpdateTimestamp()
@@ -203,7 +254,10 @@ public class KcpConnection
 
     internal unsafe void KcpUpdateTimestamp(uint currentTimestampMillisec)
     {
-        ikcp_update(kcp, currentTimestampMillisec, this);
+        lock (this)
+        {
+            ikcp_update(kcp, currentTimestampMillisec, this);
+        }
     }
 
     static unsafe int KcpOutputCallback(byte* buf, int len, IKCPCB* kcp, object user)

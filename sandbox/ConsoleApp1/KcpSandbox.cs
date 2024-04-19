@@ -31,6 +31,7 @@ internal class KcpSandbox
                 Console.WriteLine("Server Received: " + str);
 
                 await stream.WriteAsync(Encoding.UTF8.GetBytes(str));
+                //await stream.WriteUnreliableAsync(Encoding.UTF8.GetBytes(str));
             }
         }
     }
