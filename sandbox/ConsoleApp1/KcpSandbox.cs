@@ -13,7 +13,12 @@ internal class KcpSandbox
 
     public static async Task KcpEchoServer()
     {
-        var listener = await KcpListener.ListenAsync(listenPort);
+
+        var listener = await KcpListener.ListenAsync(new KcpListenerOptions
+        {
+            ListenEndPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), listenPort),
+            EventLoopCount = 1
+        });
         while (true)
         {
             var conn = await listener.AcceptConnectionAsync();
@@ -38,27 +43,36 @@ internal class KcpSandbox
 
     public static async Task KcpEchoClient(int id)
     {
-        var connection = await KcpConnection.ConnectAsync(new IPEndPoint(IPAddress.Parse("127.0.0.1"), listenPort));
+        var connection = await KcpConnection.ConnectAsync("127.0.0.1", listenPort);
 
         var buffer = new byte[1024];
         var stream = await connection.OpenOutboundStreamAsync();
         while (true)
         {
             // var inputText = Console.ReadLine();
-            var inputText = Random.Shared.Next().ToString();
+            var inputText = id + ":" +  Random.Shared.Next().ToString();
 
             await stream.WriteAsync(Encoding.UTF8.GetBytes(inputText!));
 
             var len = await stream.ReadAsync(buffer);
 
             var str = Encoding.UTF8.GetString(buffer, 0, len);
-            Console.WriteLine($"Client{id} Received: " + str);
+            
+            if (inputText == str)
+            {
+                Console.WriteLine($"Client{id} Received: " + str);
+            }
+            else
+            {
+                Console.WriteLine("NG");
+                throw new Exception("Invalid Data Received");
+            }
         }
     }
 
     public static async Task KcpEchoClientUnreliable(int id)
     {
-        var connection = await KcpConnection.ConnectAsync(new IPEndPoint(IPAddress.Parse("127.0.0.1"), listenPort));
+        var connection = await KcpConnection.ConnectAsync("127.0.0.1", listenPort);
 
         var buffer = new byte[1024];
         var stream = await connection.OpenOutboundStreamAsync();

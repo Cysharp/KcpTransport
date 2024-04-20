@@ -1,5 +1,5 @@
-﻿using System.Collections.Concurrent;
-using System.Diagnostics;
+﻿using KcpTransport.LowLevel;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
@@ -8,25 +8,60 @@ using System.Threading.Channels;
 
 namespace KcpTransport;
 
+public abstract record class KcpOptions
+{
+    public bool EnableNoDelay { get; set; } = true;
+    public int IntervalMilliseconds { get; set; } = 10; // ikcp_nodelay min is 10.
+    public int Resend { get; set; } = 2;
+    public bool EnableFlowControl { get; set; } = false;
+    public (int SendWindow, int ReceiveWindow) WindowSize { get; set; } = ((int)KcpMethods.IKCP_WND_SND, (int)KcpMethods.IKCP_WND_RCV);
+    public int MaximumTransmissionUnit { get; set; } = (int)KcpMethods.IKCP_MTU_DEF;
+    // public int MinimumRetransmissionTimeout { get; set; } this value is changed in ikcp_nodelay(and use there default) so no configurable.
+}
+
+public sealed record class KcpListenerOptions : KcpOptions
+{
+    public required IPEndPoint ListenEndPoint { get; set; }
+    public TimeSpan UpdatePeriod { get; set; } = TimeSpan.FromMilliseconds(5);
+    public int EventLoopCount { get; set; } = Math.Max(1, Environment.ProcessorCount / 2);
+    public bool ConfigureAwait { get; set; } = false;
+}
+
 public sealed class KcpListener : IDisposable
 {
     Socket socket;
     Channel<KcpConnection> acceptQueue;
-    ConcurrentDictionary<uint, KcpConnection> connections = new();
-    readonly long startingTimestamp = Stopwatch.GetTimestamp();
 
-    public static ValueTask<KcpListener> ListenAsync(int listenPort)
+    ConcurrentDictionary<uint, KcpConnection> connections = new();
+
+    Task[] socketEventLoopTasks;
+    Thread updateConnectionsWorkerThread;
+    CancellationTokenSource listenerCancellationTokenSource = new();
+
+    public static ValueTask<KcpListener> ListenAsync(string host, int port, CancellationToken cancellationToken = default)
     {
-        // sync but for future extensibility.
-        return new ValueTask<KcpListener>(new KcpListener(listenPort));
+        return ListenAsync(new IPEndPoint(IPAddress.Parse(host), port), cancellationToken);
     }
 
-    KcpListener(int listenPort)
+    public static ValueTask<KcpListener> ListenAsync(IPEndPoint listenEndPoint, CancellationToken cancellationToken = default)
+    {
+        return ListenAsync(new KcpListenerOptions { ListenEndPoint = listenEndPoint }, cancellationToken);
+    }
+
+    public static ValueTask<KcpListener> ListenAsync(KcpListenerOptions options, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // sync but for future extensibility.
+        return new ValueTask<KcpListener>(new KcpListener(options));
+    }
+
+    KcpListener(KcpListenerOptions options)
     {
         Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true); // in Linux, as SO_REUSEPORT
 
-        var endPoint = new IPEndPoint(IPAddress.Any, listenPort);
+        var endPoint = options.ListenEndPoint;
         try
         {
             socket.Bind(endPoint);
@@ -43,7 +78,19 @@ public sealed class KcpListener : IDisposable
             SingleWriter = true
         });
 
-        this.StartSocketEventLoop(endPoint);
+        this.socketEventLoopTasks = new Task[options.EventLoopCount];
+        for (int i = 0; i < socketEventLoopTasks.Length; i++)
+        {
+            socketEventLoopTasks[i] = this.StartSocketEventLoopAsync(options, i);
+        }
+
+        updateConnectionsWorkerThread = new Thread(RunUpdateKcpConnectionLoop)
+        {
+            Name = $"{nameof(KcpListener)}",
+            IsBackground = true,
+            Priority = ThreadPriority.AboveNormal,
+        };
+        updateConnectionsWorkerThread.Start(options.UpdatePeriod);
     }
 
     public ValueTask<KcpConnection> AcceptConnectionAsync(CancellationToken cancellationToken = default)
@@ -51,15 +98,16 @@ public sealed class KcpListener : IDisposable
         return acceptQueue.Reader.ReadAsync(cancellationToken);
     }
 
-    async void StartSocketEventLoop(IPEndPoint serverEndPoint, CancellationToken cancellationToken = default)
+    async Task StartSocketEventLoopAsync(KcpListenerOptions options, int id)
     {
         await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
 
-        var receivedAddress = new SocketAddress(AddressFamily.InterNetwork);
+        var receivedAddress = new SocketAddress(options.ListenEndPoint.AddressFamily);
         var random = new Random();
+        var cancellationToken = this.listenerCancellationTokenSource.Token;
 
         // TODO: mtu size
-        var socketBuffer = GC.AllocateUninitializedArray<byte>(1500, pinned: true); // Create to pinned object heap
+        var socketBuffer = GC.AllocateUninitializedArray<byte>(1400, pinned: true); // Create to pinned object heap
 
         while (true)
         {
@@ -81,7 +129,7 @@ public sealed class KcpListener : IDisposable
                         }
 
                         // create new connection
-                        var kcpConnection = new KcpConnection(conversationId, serverEndPoint, receivedAddress);
+                        var kcpConnection = new KcpConnection(conversationId, options, receivedAddress);
                         connections[conversationId] = kcpConnection;
                         acceptQueue.Writer.TryWrite(kcpConnection);
                         SendHandshakeResponse(socket, conversationId, receivedAddress);
@@ -96,8 +144,10 @@ public sealed class KcpListener : IDisposable
                             continue;
                         }
 
-                        kcpConnection.WriteRawBuffer(socketBuffer.AsSpan(8, received - 8));
-                        await kcpConnection.StreamFlushAsync(cancellationToken);
+                        kcpConnection.InputReceivedUnreliableBuffer(socketBuffer.AsSpan(8, received - 8));
+
+                        await kcpConnection.AwaitForLastFlushResult();
+                        kcpConnection.FlushReceivedBuffer(cancellationToken);
                     }
                     break;
                 default:
@@ -117,14 +167,11 @@ public sealed class KcpListener : IDisposable
                         unsafe
                         {
                             var socketBufferPointer = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(socketBuffer));
-                            if (!kcpConnection.InputReceivedBuffer(socketBufferPointer, received)) continue;
+                            if (!kcpConnection.InputReceivedKcpBuffer(socketBufferPointer, received)) continue;
                         }
 
-                        if (kcpConnection.ConsumeKcpFragments(receivedAddress))
-                        {
-                            // TODO: don't (a)wait in this loop!
-                            await kcpConnection.StreamFlushAsync(cancellationToken);
-                        }
+                        await kcpConnection.AwaitForLastFlushResult();
+                        kcpConnection.ConsumeKcpFragments(receivedAddress, cancellationToken);
                     }
                     break;
             }
@@ -138,14 +185,30 @@ public sealed class KcpListener : IDisposable
         }
     }
 
-    public void UpdateConnections()
+    void RunUpdateKcpConnectionLoop(object? state)
     {
-        var elapsed = Stopwatch.GetElapsedTime(startingTimestamp);
-        foreach (var connection in connections.Values) // TODO: Dictionary iteration is slow. need more.
+        // NOTE: should use ikcp_check? https://github.com/skywind3000/kcp/wiki/EN_KCP-Best-Practice#advance-update
+
+        // All Windows(.NET) Timer and Sleep is low-resolution(min is 16ms).
+        // We use custom high-resolution timer instead.
+
+        var cancellationToken = listenerCancellationTokenSource.Token;
+        var period = (TimeSpan)state!;
+        var waitTime = (int)period.TotalMilliseconds;
+
+        while (true)
         {
-            if (connection != null)
+            SleepInterop.Sleep(waitTime);
+
+            if (cancellationToken.IsCancellationRequested) break;
+
+            foreach (var kvp in connections)
             {
-                connection.KcpUpdateTimestamp((uint)elapsed.TotalMilliseconds);
+                var connection = kvp.Value;
+                if (connection != null) // at handshake, connection is not created yet so sometimes null...
+                {
+                    connection.UpdateKcp();
+                }
             }
         }
     }
@@ -153,6 +216,16 @@ public sealed class KcpListener : IDisposable
     public unsafe void Dispose()
     {
         // TODO:connections dispose?
+
+        acceptQueue.Writer.Complete();
+
+        listenerCancellationTokenSource.Cancel();
+        listenerCancellationTokenSource.Dispose();
+
         socket.Dispose();
+        foreach (var connection in connections)
+        {
+            connection.Value.Dispose();
+        }
     }
 }

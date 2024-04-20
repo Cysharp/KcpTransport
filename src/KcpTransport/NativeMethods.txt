@@ -1,0 +1,4 @@
+CreateWaitableTimerExW
+SetWaitableTimer
+WaitForSingleObject
+CancelWaitableTimer

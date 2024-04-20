@@ -11,7 +11,8 @@ public sealed unsafe class KcpStream : Stream
     Pipe pipe;
     Stream pipeReaderStream;
 
-    internal PipeWriter Writer => pipe.Writer;
+    // write received, decoded kcp buffer to PipeStream
+    internal PipeWriter InputWriter => pipe.Writer;
 
     internal KcpStream(KcpConnection connection)
     {
@@ -70,7 +71,13 @@ public sealed unsafe class KcpStream : Stream
 
     public override void Flush()
     {
-        connection.Flush();
+        connection.KcpFlush();
+    }
+
+    public override Task FlushAsync(CancellationToken cancellationToken)
+    {
+        connection.KcpFlush();
+        return Task.CompletedTask;
     }
 
     protected override void Dispose(bool disposing)

@@ -4,7 +4,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using IINT32 = int;
 using IUINT32 = uint;
-using size_t = nint;
 
 namespace KcpTransport.LowLevel;
 
