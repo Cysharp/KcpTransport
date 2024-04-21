@@ -17,6 +17,7 @@ public sealed record class KcpClientConnectionOptions : KcpOptions
     public required EndPoint RemoteEndPoint { get; set; }
     public TimeSpan UpdatePeriod { get; set; } = TimeSpan.FromMilliseconds(5);
     public bool ConfigureAwait { get; set; } = false;
+    public Action<Socket, KcpClientConnectionOptions>? ConfigureSocket { get; set; }
 }
 
 // KcpConnections is both used for server and client
@@ -33,6 +34,8 @@ public class KcpConnection : IDisposable
     readonly long startingTimestamp = Stopwatch.GetTimestamp();
     CancellationTokenSource connectionCancellationTokenSource = new();
     readonly object gate = new object();
+
+    internal object SyncRoot => gate;
 
     // create by User(from KcpConnection.ConnectAsync), for client connection
     unsafe KcpConnection(Socket socket, uint conversationId, KcpClientConnectionOptions options)
@@ -70,8 +73,10 @@ public class KcpConnection : IDisposable
         this.remoteAddress = remoteAddress.Clone();
 
         // bind same port and connect client IP, this socket is used only for Send
-        this.socket = new Socket(SocketType.Dgram, ProtocolType.Udp);
+        this.socket = new Socket(remoteAddress.Family, SocketType.Dgram, ProtocolType.Udp);
+        this.socket.Blocking = false;
         this.socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        options.ConfigureSocket?.Invoke(socket, options, ListenerSocketType.Send);
         this.socket.Bind(options.ListenEndPoint);
         this.socket.Connect(remoteAddress.ToIPEndPoint());
 
@@ -93,25 +98,40 @@ public class KcpConnection : IDisposable
 
     public static async ValueTask<KcpConnection> ConnectAsync(KcpClientConnectionOptions options, CancellationToken cancellationToken = default)
     {
-        var socket = new Socket(SocketType.Dgram, ProtocolType.Udp);
+        var socket = new Socket(options.RemoteEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+        socket.Blocking = false;
+        options.ConfigureSocket?.Invoke(socket, options);
         await socket.ConnectAsync(options.RemoteEndPoint, cancellationToken).ConfigureAwait(options.ConfigureAwait);
 
-        SendHandshakeRequest(socket);
+        SendHandshakeInitialRequest(socket);
 
         // TODO: retry?
-        var initialWaitBuffer = new byte[4];
-        var received = await socket.ReceiveAsync(initialWaitBuffer);
-        if (received != 4) throw new Exception();
+        var handshakeBuffer = new byte[20];
+        var received = await socket.ReceiveAsync(handshakeBuffer);
+        if (received != 20) throw new Exception();
 
-        var conversationId = MemoryMarshal.Read<uint>(initialWaitBuffer);
+        var conversationId = MemoryMarshal.Read<uint>(handshakeBuffer.AsSpan(4));
+        SendHandshakeOkRequest(socket, handshakeBuffer);
+
+        var received2 = await socket.ReceiveAsync(handshakeBuffer);
+        if (received2 != 4) throw new Exception();
+        var responseCode = (PacketType)MemoryMarshal.Read<uint>(handshakeBuffer);
+
+        if (responseCode != PacketType.HandshakeOkResponse) throw new Exception();
 
         var connection = new KcpConnection(socket, conversationId, options);
         return connection;
 
-        static void SendHandshakeRequest(Socket socket)
+        static void SendHandshakeInitialRequest(Socket socket)
         {
             Span<byte> data = stackalloc byte[4];
-            MemoryMarshal.Write(data, (uint)PacketType.Handshake);
+            MemoryMarshal.Write(data, (uint)PacketType.HandshakeInitialRequest);
+            socket.Send(data);
+        }
+
+        static void SendHandshakeOkRequest(Socket socket, Span<byte> data)
+        {
+            MemoryMarshal.Write(data, (uint)PacketType.HandshakeOkRequest);
             socket.Send(data);
         }
     }

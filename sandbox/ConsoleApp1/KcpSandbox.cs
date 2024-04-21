@@ -50,14 +50,14 @@ internal class KcpSandbox
         while (true)
         {
             // var inputText = Console.ReadLine();
-            var inputText = id + ":" +  Random.Shared.Next().ToString();
+            var inputText = id + ":" + Random.Shared.Next().ToString();
 
             await stream.WriteAsync(Encoding.UTF8.GetBytes(inputText!));
 
             var len = await stream.ReadAsync(buffer);
 
             var str = Encoding.UTF8.GetString(buffer, 0, len);
-            
+
             if (inputText == str)
             {
                 Console.WriteLine($"Client{id} Received: " + str);

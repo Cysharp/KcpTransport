@@ -4,6 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Threading.Channels;
 
 namespace KcpTransport;
@@ -19,12 +20,27 @@ public abstract record class KcpOptions
     // public int MinimumRetransmissionTimeout { get; set; } this value is changed in ikcp_nodelay(and use there default) so no configurable.
 }
 
+public enum ListenerSocketType
+{
+    Receive,
+    Send
+}
+
+public delegate ReadOnlySpan<byte> HashFunc();
+
 public sealed record class KcpListenerOptions : KcpOptions
 {
+    static readonly byte[] DefaultRandomHashKey = RandomNumberGenerator.GetBytes(32);
+
     public required IPEndPoint ListenEndPoint { get; set; }
     public TimeSpan UpdatePeriod { get; set; } = TimeSpan.FromMilliseconds(5);
     public int EventLoopCount { get; set; } = Math.Max(1, Environment.ProcessorCount / 2);
     public bool ConfigureAwait { get; set; } = false;
+    public TimeSpan HandshakeTimeout { get; set; } = TimeSpan.FromSeconds(30);
+    public HashFunc Handshake32bitHashKeyGenerator { get; set; } = KeyGenerator;
+    public Action<Socket, KcpListenerOptions, ListenerSocketType>? ConfigureSocket { get; set; }
+
+    static ReadOnlySpan<byte> KeyGenerator() => DefaultRandomHashKey;
 }
 
 public sealed class KcpListener : IDisposable
@@ -58,8 +74,10 @@ public sealed class KcpListener : IDisposable
 
     KcpListener(KcpListenerOptions options)
     {
-        Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        Socket socket = new Socket(options.ListenEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+        socket.Blocking = false;
         socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true); // in Linux, as SO_REUSEPORT
+        options.ConfigureSocket?.Invoke(socket, options, ListenerSocketType.Receive);
 
         var endPoint = options.ListenEndPoint;
         try
@@ -119,20 +137,45 @@ public sealed class KcpListener : IDisposable
             var packetType = (PacketType)conversationId;
             switch (packetType)
             {
-                case PacketType.Handshake:
+                case PacketType.HandshakeInitialRequest:
                 ISSUE_CONVERSATION_ID:
                     {
                         conversationId = unchecked((uint)random.Next(100, int.MaxValue)); // 0~99 is reserved
-                        if (!connections.TryAdd(conversationId, null!)) // reserve dictionary space
+                        if (connections.ContainsKey(conversationId))
                         {
                             goto ISSUE_CONVERSATION_ID;
+                        }
+
+                        // send tentative id and cookie to avoid syn-flood(don't allocate memory in this phase)
+                        var (cookie, timestamp) = SynCookie.Generate(options.Handshake32bitHashKeyGenerator(), receivedAddress);
+
+                        SendHandshakeInitialResponse(socket, receivedAddress, conversationId, cookie, timestamp);
+                    }
+                    break;
+                case PacketType.HandshakeOkRequest:
+                    {
+                        conversationId = MemoryMarshal.Read<uint>(socketBuffer.AsSpan(4, received - 4));
+                        var cookie = MemoryMarshal.Read<uint>(socketBuffer.AsSpan(8, received - 8));
+                        var timestamp = MemoryMarshal.Read<long>(socketBuffer.AsSpan(12, received - 12));
+
+                        if (!SynCookie.Validate(options.Handshake32bitHashKeyGenerator(), options.HandshakeTimeout, cookie, receivedAddress, timestamp))
+                        {
+                            SendHandshakeNgResponse(socket, receivedAddress);
+                            break;
+                        }
+
+                        if (!connections.TryAdd(conversationId, null!))
+                        {
+                            // can't added, client should retry
+                            SendHandshakeNgResponse(socket, receivedAddress);
+                            break;
                         }
 
                         // create new connection
                         var kcpConnection = new KcpConnection(conversationId, options, receivedAddress);
                         connections[conversationId] = kcpConnection;
                         acceptQueue.Writer.TryWrite(kcpConnection);
-                        SendHandshakeResponse(socket, conversationId, receivedAddress);
+                        SendHandshakeOkResponse(socket, receivedAddress);
                     }
                     break;
                 case PacketType.Unreliable:
@@ -144,10 +187,13 @@ public sealed class KcpListener : IDisposable
                             continue;
                         }
 
-                        kcpConnection.InputReceivedUnreliableBuffer(socketBuffer.AsSpan(8, received - 8));
-
-                        await kcpConnection.AwaitForLastFlushResult();
-                        kcpConnection.FlushReceivedBuffer(cancellationToken);
+                        // This loop is sometimes called in multithread so needs lock per connection.
+                        lock (kcpConnection.SyncRoot)
+                        {
+                            kcpConnection.InputReceivedUnreliableBuffer(socketBuffer.AsSpan(8, received - 8));
+                            kcpConnection.AwaitForLastFlushResult().GetAwaiter().GetResult();
+                            kcpConnection.FlushReceivedBuffer(cancellationToken);
+                        }
                     }
                     break;
                 default:
@@ -164,23 +210,43 @@ public sealed class KcpListener : IDisposable
                             continue;
                         }
 
-                        unsafe
+                        lock (kcpConnection.SyncRoot)
                         {
-                            var socketBufferPointer = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(socketBuffer));
-                            if (!kcpConnection.InputReceivedKcpBuffer(socketBufferPointer, received)) continue;
-                        }
+                            unsafe
+                            {
+                                var socketBufferPointer = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(socketBuffer));
+                                if (!kcpConnection.InputReceivedKcpBuffer(socketBufferPointer, received)) continue;
+                            }
 
-                        await kcpConnection.AwaitForLastFlushResult();
-                        kcpConnection.ConsumeKcpFragments(receivedAddress, cancellationToken);
+                            kcpConnection.AwaitForLastFlushResult().GetAwaiter().GetResult();
+                            kcpConnection.ConsumeKcpFragments(receivedAddress, cancellationToken);
+                        }
                     }
                     break;
             }
         }
 
-        static void SendHandshakeResponse(Socket socket, uint conversationId, SocketAddress clientAddress)
+        static void SendHandshakeInitialResponse(Socket socket, SocketAddress clientAddress, uint conversationId, uint cookie, long timestamp)
+        {
+            Span<byte> data = stackalloc byte[20]; // type(4) + conv(4) + cookie(4) + timestamp(8)
+            MemoryMarshal.Write(data, (uint)PacketType.HandshakeInitialResponse);
+            MemoryMarshal.Write(data.Slice(4), conversationId);
+            MemoryMarshal.Write(data.Slice(8), cookie);
+            MemoryMarshal.Write(data.Slice(12), timestamp);
+            socket.SendTo(data, SocketFlags.None, clientAddress);
+        }
+
+        static void SendHandshakeOkResponse(Socket socket, SocketAddress clientAddress)
         {
             Span<byte> data = stackalloc byte[4];
-            MemoryMarshal.Write<uint>(data, conversationId);
+            MemoryMarshal.Write(data, (uint)PacketType.HandshakeOkResponse);
+            socket.SendTo(data, SocketFlags.None, clientAddress);
+        }
+
+        static void SendHandshakeNgResponse(Socket socket, SocketAddress clientAddress)
+        {
+            Span<byte> data = stackalloc byte[4];
+            MemoryMarshal.Write(data, (uint)PacketType.HandshakeNgResponse);
             socket.SendTo(data, SocketFlags.None, clientAddress);
         }
     }

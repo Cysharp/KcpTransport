@@ -38,10 +38,12 @@ var client1 = Task.Run(async () =>
     //await c1;
     //var c2 = KcpSandbox.KcpEchoClient(2);
     //await Task.WhenAll(c1, c2);
-    var c3 = KcpSandbox.KcpEchoClientUnreliable(3);
+    // var c3 = KcpSandbox.KcpEchoClientUnreliable(3);
+
+    var count = 10;
 
     List<Task> conns = new();
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < count; i++)
     {
         conns.Add(KcpSandbox.KcpEchoClient(i));
     }

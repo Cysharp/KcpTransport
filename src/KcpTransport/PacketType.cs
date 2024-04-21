@@ -3,8 +3,13 @@
 // KCP first 4 byte is conversationId, If 0~99(reserved, don't issue this range) then not KCP packet.
 internal enum PacketType : uint
 {
-    Handshake = 33,
-    Unreliable = 71, // Unliable is 8byte header(71(4byte) + conversationId(4byte))
+    HandshakeInitialRequest = 31,  // 4byte(type)
+    HandshakeInitialResponse = 32, // 20byte(type + conversationId + cookie + timestamp)
+    HandshakeOkRequest = 33,       // 20byte(type + conversationId + cookie + timestamp)
+    HandshakeOkResponse = 34,      // 4byte(type)
+    HandshakeNgResponse = 35,      // 4byte(type)
+
+    Unreliable = 71, // Unliable is 8byte header(type(4byte) + conversationId(4byte))
 
     // Reliable = 100 ~ uint.MaxValue
 }
