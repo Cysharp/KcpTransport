@@ -51,6 +51,11 @@ public sealed unsafe class KcpStream : Stream
         connection.SendReliableBuffer(buffer);
     }
 
+    public void WriteUnreliable(ReadOnlySpan<byte> buffer)
+    {
+        connection.SendUnreliableBuffer(buffer);
+    }
+
     public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
     {
         connection.SendReliableBuffer(buffer.AsSpan(offset, count));

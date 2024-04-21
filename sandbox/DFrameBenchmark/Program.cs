@@ -53,7 +53,7 @@ public class KcpServer
             }
             catch (KcpDisconnectedException)
             {
-                await Console.Out.WriteLineAsync("Disconnected");
+                // await Console.Out.WriteLineAsync("Disconnected");
             }
         }
     }
@@ -64,6 +64,7 @@ public class KcpTest : Workload
     KcpConnection connection = default!;
     KcpStream stream = default!;
     byte[] buf = new byte[1024];
+    byte[] msg = "Hello World"u8.ToArray();
 
     public override async Task SetupAsync(WorkloadContext context)
     {

@@ -80,6 +80,19 @@ public sealed class KcpListener : IDisposable, IAsyncDisposable
         Socket socket = new Socket(options.ListenEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
         socket.Blocking = false;
         socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true); // in Linux, as SO_REUSEPORT
+
+        // http://handyresearcher.blog.fc2.com/blog-entry-18.html
+        // https://stackoverflow.com/questions/7201862/an-existing-connection-was-forcibly-closed-by-the-remote-host/7478498
+        // https://stackoverflow.com/questions/34242622/windows-udp-sockets-recvfrom-fails-with-error-10054
+        // https://stackoverflow.com/questions/74327225/why-does-sending-via-a-udpclient-cause-subsequent-receiving-to-fail
+        if (OperatingSystem.IsWindows())
+        {
+            const uint IOC_IN = 0x80000000U;
+            const uint IOC_VENDOR = 0x18000000U;
+            const uint SIO_UDP_CONNRESET = IOC_IN | IOC_VENDOR | 12;
+            socket.IOControl(unchecked((int)SIO_UDP_CONNRESET), [0x00], null);
+        }
+
         options.ConfigureSocket?.Invoke(socket, options, ListenerSocketType.Receive);
 
         var endPoint = options.ListenEndPoint;
@@ -231,10 +244,10 @@ public sealed class KcpListener : IDisposable, IAsyncDisposable
 
 
                             // This loop is sometimes called in multithread so needs lock per connection.
+                            await kcpConnection.AwaitForLastFlushResult();
                             lock (kcpConnection.SyncRoot)
                             {
                                 kcpConnection.InputReceivedUnreliableBuffer(socketBuffer.AsSpan(8, received - 8));
-                                kcpConnection.AwaitForLastFlushResult().GetAwaiter().GetResult();
                                 kcpConnection.FlushReceivedBuffer(cancellationToken);
                             }
                         }
@@ -253,6 +266,7 @@ public sealed class KcpListener : IDisposable, IAsyncDisposable
                                 continue;
                             }
 
+                            await kcpConnection.AwaitForLastFlushResult();
                             lock (kcpConnection.SyncRoot)
                             {
                                 unsafe
@@ -261,7 +275,6 @@ public sealed class KcpListener : IDisposable, IAsyncDisposable
                                     if (!kcpConnection.InputReceivedKcpBuffer(socketBufferPointer, received)) continue;
                                 }
 
-                                kcpConnection.AwaitForLastFlushResult().GetAwaiter().GetResult();
                                 kcpConnection.ConsumeKcpFragments(receivedAddress, cancellationToken);
                             }
                         }
@@ -270,15 +283,7 @@ public sealed class KcpListener : IDisposable, IAsyncDisposable
             }
             catch (SocketException ex)
             {
-                // TODO: ???
-                if (ex.SocketErrorCode == SocketError.ConnectionReset)
-                {
-                    // Console.WriteLine("Connection Reset");
-                }
-                else
-                {
-                    Console.WriteLine(ex);
-                }
+                // TODO: log?
             }
         }
 
