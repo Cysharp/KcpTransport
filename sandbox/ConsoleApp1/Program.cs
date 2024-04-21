@@ -33,29 +33,29 @@ Thread.Sleep(100);
 
 var client1 = Task.Run(async () =>
 {
-    //UdpSandbox.UdpHelloClient2();
-    //var c1 = KcpSandbox.KcpEchoClient(1);
-    //await c1;
+    //UdpSandbox.UdpHelloClient2DisposeLoop();
+    var c1 = KcpSandbox.KcpEchoClient(1);
+    await c1;
     //var c2 = KcpSandbox.KcpEchoClient(2);
     //await Task.WhenAll(c1, c2);
     // var c3 = KcpSandbox.KcpEchoClientUnreliable(3);
 
-    var count = 10;
+    //var count = 1;
 
-    List<Task> conns = new();
-    for (int i = 0; i < count; i++)
-    {
-        conns.Add(KcpSandbox.KcpEchoClient(i));
-    }
+    //List<Task> conns = new();
+    //for (int i = 0; i < count; i++)
+    //{
+    //    conns.Add(KcpSandbox.KcpEchoClient(i));
+    //}
 
-    await Task.WhenAll(conns);
+    //await Task.WhenAll(conns);
 });
 //var client2 = Task.Run(() =>
 //{
 //    UdpHelloClient();
 //});
 
-await await Task.WhenAny(client1, server);
+await  Task.WhenAll(client1, server);
 
 
 // unsafe

@@ -17,13 +17,23 @@ public sealed record class KcpClientConnectionOptions : KcpOptions
     public required EndPoint RemoteEndPoint { get; set; }
     public TimeSpan UpdatePeriod { get; set; } = TimeSpan.FromMilliseconds(5);
     public bool ConfigureAwait { get; set; } = false;
+    public TimeSpan KeepAliveDelay { get; set; } = TimeSpan.FromSeconds(20);
+    public TimeSpan ConnectionTimeout { get; set; } = TimeSpan.FromMinutes(1);
     public Action<Socket, KcpClientConnectionOptions>? ConfigureSocket { get; set; }
+}
+
+public sealed class KcpDisconnectedException : Exception
+{
+
 }
 
 // KcpConnections is both used for server and client
 public class KcpConnection : IDisposable
 {
+    static readonly TimeSpan PingInterval = TimeSpan.FromSeconds(5);
+
     unsafe IKCPCB* kcp;
+    uint conversationId;
     SocketAddress? remoteAddress;
     KcpStream stream;
     Socket socket;
@@ -32,14 +42,20 @@ public class KcpConnection : IDisposable
     ValueTask<FlushResult> lastFlushResult = default;
 
     readonly long startingTimestamp = Stopwatch.GetTimestamp();
+    readonly TimeSpan keepAliveDelay;
     CancellationTokenSource connectionCancellationTokenSource = new();
     readonly object gate = new object();
+    long lastReceivedTimestamp;
+    long lastPingSent;
+    bool isDisposed;
 
     internal object SyncRoot => gate;
 
     // create by User(from KcpConnection.ConnectAsync), for client connection
     unsafe KcpConnection(Socket socket, uint conversationId, KcpClientConnectionOptions options)
     {
+        this.conversationId = conversationId;
+        this.keepAliveDelay = options.KeepAliveDelay;
         this.kcp = ikcp_create(conversationId);
         this.kcp->output = &KcpOutputCallback;
         ConfigKcpWorkMode(options.EnableNoDelay, options.IntervalMilliseconds, options.Resend, options.EnableFlowControl);
@@ -48,8 +64,9 @@ public class KcpConnection : IDisposable
 
         this.socket = socket;
         this.stream = new KcpStream(this);
+        this.lastReceivedTimestamp = startingTimestamp;
 
-        this.receiveEventLoopTask = StartSocketEventLoopAsync();
+        this.receiveEventLoopTask = StartSocketEventLoopAsync(options);
 
         UpdateKcp(); // initial set kcp timestamp
         updateKcpWorkerThread = new Thread(RunUpdateKcpLoop)
@@ -58,12 +75,14 @@ public class KcpConnection : IDisposable
             IsBackground = true,
             Priority = ThreadPriority.AboveNormal,
         };
-        updateKcpWorkerThread.Start(options.UpdatePeriod);
+        updateKcpWorkerThread.Start(options);
     }
 
     // create from Listerner for server connection
     internal unsafe KcpConnection(uint conversationId, KcpListenerOptions options, SocketAddress remoteAddress)
     {
+        this.conversationId = conversationId;
+        this.keepAliveDelay = options.KeepAliveDelay;
         this.kcp = ikcp_create(conversationId);
         this.kcp->output = &KcpOutputCallback;
         ConfigKcpWorkMode(options.EnableNoDelay, options.IntervalMilliseconds, options.Resend, options.EnableFlowControl);
@@ -81,6 +100,7 @@ public class KcpConnection : IDisposable
         this.socket.Connect(remoteAddress.ToIPEndPoint());
 
         this.stream = new KcpStream(this);
+        this.lastReceivedTimestamp = startingTimestamp;
 
         UpdateKcp(); // initial set kcp timestamp
         // StartUpdateKcpLoopAsync(); server operation, Update will be called from KcpListener so no need update self.
@@ -141,16 +161,17 @@ public class KcpConnection : IDisposable
         return new ValueTask<KcpStream>(stream);
     }
 
-    async Task StartSocketEventLoopAsync()
+    async Task StartSocketEventLoopAsync(KcpClientConnectionOptions options)
     {
         await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
         var cancellationToken = this.connectionCancellationTokenSource.Token;
 
-        // TODO: mtu size
-        var socketBuffer = GC.AllocateUninitializedArray<byte>(1500, pinned: true); // Create to pinned object heap
+        var socketBuffer = GC.AllocateUninitializedArray<byte>(options.MaximumTransmissionUnit, pinned: true); // Create to pinned object heap
 
         while (true)
         {
+            if (isDisposed) return;
+
             // Socket is datagram so received contains full block
             var received = await socket.ReceiveAsync(socketBuffer, SocketFlags.None, cancellationToken);
 
@@ -164,6 +185,16 @@ public class KcpConnection : IDisposable
                         InputReceivedUnreliableBuffer(socketBuffer.AsSpan(8, received - 8));
                         await stream.InputWriter.FlushAsync(cancellationToken);
                     }
+                    break;
+                case PacketType.Ping:
+                    PingReceived();
+                    break;
+                case PacketType.Pong:
+                    PongReceived();
+                    break;
+                case PacketType.Disconnect:
+                    Disconnect();
+                    Dispose();
                     break;
                 default:
                     {
@@ -192,7 +223,9 @@ public class KcpConnection : IDisposable
     void RunUpdateKcpLoop(object? state)
     {
         var cancellationToken = connectionCancellationTokenSource.Token;
-        var period = (TimeSpan)state!;
+        var options = (KcpClientConnectionOptions)state!;
+        var period = options.UpdatePeriod;
+        var timeout = options.ConnectionTimeout;
         var waitTime = (int)period.TotalMilliseconds;
 
         while (true)
@@ -201,7 +234,16 @@ public class KcpConnection : IDisposable
 
             if (cancellationToken.IsCancellationRequested) break;
 
-            UpdateKcp();
+            var currentTimestamp = Stopwatch.GetTimestamp();
+            if (IsAlive(currentTimestamp, timeout))
+            {
+                TrySendPing(currentTimestamp);
+                UpdateKcp();
+            }
+            else
+            {
+                // TODO: Disconnect.
+            }
         }
     }
 
@@ -216,8 +258,11 @@ public class KcpConnection : IDisposable
 
     internal unsafe bool InputReceivedKcpBuffer(byte* buffer, int length)
     {
+        lastReceivedTimestamp = Stopwatch.GetTimestamp();
         lock (gate)
         {
+            if (isDisposed) return false;
+
             var inputResult = ikcp_input(kcp, buffer, length);
             if (inputResult == 0)
             {
@@ -236,6 +281,8 @@ public class KcpConnection : IDisposable
         var needFlush = false;
         lock (gate)
         {
+            if (isDisposed) return;
+
             var size = ikcp_peeksize(kcp);
             if (size > 0)
             {
@@ -267,6 +314,7 @@ public class KcpConnection : IDisposable
 
     internal unsafe void InputReceivedUnreliableBuffer(ReadOnlySpan<byte> span)
     {
+        lastReceivedTimestamp = Stopwatch.GetTimestamp();
         stream.InputWriter.Write(span);
     }
 
@@ -278,6 +326,8 @@ public class KcpConnection : IDisposable
         {
             lock (gate)
             {
+                if (isDisposed) return;
+
                 ikcp_send(kcp, p, buffer.Length);
             }
         }
@@ -295,7 +345,12 @@ public class KcpConnection : IDisposable
             MemoryMarshal.Write(span.Slice(4), kcp->conv);
             buffer.CopyTo(span.Slice(8));
 
-            socket.Send(span.Slice(0, packetLength));
+            lock (gate)
+            {
+                if (isDisposed) return;
+
+                socket.Send(span.Slice(0, packetLength));
+            }
         }
         finally
         {
@@ -307,6 +362,8 @@ public class KcpConnection : IDisposable
     {
         lock (gate)
         {
+            if (isDisposed) return;
+
             ikcp_flush(kcp, this);
         }
     }
@@ -317,8 +374,77 @@ public class KcpConnection : IDisposable
         var currentTimestampMillisec = (uint)elapsed.TotalMilliseconds;
         lock (gate)
         {
+            if (isDisposed) return;
+
             ikcp_update(kcp, currentTimestampMillisec, this);
         }
+    }
+
+    internal unsafe bool IsAlive(long currentTimestamp, TimeSpan timeout)
+    {
+        if (isDisposed) return false;
+
+        // ikcp.c
+        // if (segment->xmit >= kcp->dead_link) kcp->state = unchecked((IUINT32)(-1));
+        if (kcp->state == unchecked((uint)(-1)))
+        {
+            return false;
+        }
+
+        var elapsed = Stopwatch.GetElapsedTime(lastReceivedTimestamp, currentTimestamp);
+        if (elapsed < timeout)
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    internal unsafe void TrySendPing(long currentTimestamp)
+    {
+        if (isDisposed) return;
+
+        var elapsed = Stopwatch.GetElapsedTime(lastReceivedTimestamp, currentTimestamp);
+        if (elapsed > keepAliveDelay)
+        {
+            // send ping per 5 seconds.
+            var ping = Stopwatch.GetElapsedTime(lastPingSent, currentTimestamp);
+            if (ping > PingInterval)
+            {
+                lastPingSent = currentTimestamp;
+                Span<byte> pingBuffer = stackalloc byte[8];
+                MemoryMarshal.Write(pingBuffer, (uint)PacketType.Ping);
+                MemoryMarshal.Write(pingBuffer.Slice(4), conversationId);
+                lock (gate)
+                {
+                    if (isDisposed) return;
+
+                    socket.Send(pingBuffer);
+                }
+            }
+        }
+    }
+
+    internal unsafe void PingReceived()
+    {
+        lastReceivedTimestamp = Stopwatch.GetTimestamp();
+
+        // send Pong
+        Span<byte> pongBuffer = stackalloc byte[8];
+        MemoryMarshal.Write(pongBuffer, (uint)PacketType.Pong);
+        MemoryMarshal.Write(pongBuffer.Slice(4), conversationId);
+
+        lock (gate)
+        {
+            if (isDisposed) return;
+
+            socket.Send(pongBuffer);
+        }
+    }
+
+    internal unsafe void PongReceived()
+    {
+        lastReceivedTimestamp = Stopwatch.GetTimestamp();
     }
 
     // https://github.com/skywind3000/kcp/wiki/EN_KCP-Basic-Usage#config-kcp
@@ -336,6 +462,8 @@ public class KcpConnection : IDisposable
 
         lock (gate)
         {
+            if (isDisposed) return;
+
             ikcp_nodelay(kcp, enableNoDelay ? 1 : 0, intervalMilliseconds, resend, enableFlowControl ? 0 : 1);
         }
     }
@@ -347,6 +475,8 @@ public class KcpConnection : IDisposable
         // default to 32 packets.Similar to TCP SO_SNDBUF and SO_RECVBUF, but they are in bytes, while ikcp_wndsize in packets.
         lock (gate)
         {
+            if (isDisposed) return;
+
             ikcp_wndsize(kcp, sendWindow, receiveWindow);
         }
     }
@@ -357,6 +487,8 @@ public class KcpConnection : IDisposable
         // Notice that KCP never probe the MTU, user must tell KCP the right MTU to use if need.
         lock (gate)
         {
+            if (isDisposed) return;
+
             if (kcp->mtu != mtu)
             {
                 ikcp_setmtu(kcp, mtu);
@@ -372,18 +504,72 @@ public class KcpConnection : IDisposable
         // User can setup minimum RTO by: kcp->rx_minrto = 10;
         lock (gate)
         {
+            if (isDisposed) return;
+
             kcp->rx_minrto = minimumRto;
         }
     }
 
-    public unsafe void Dispose()
+    public unsafe void Disconnect()
     {
-        // TODO: isDisposed.
+        if (isDisposed) return;
+
+        // Send disconnect message
+        Span<byte> message = stackalloc byte[8];
+        MemoryMarshal.Write(message, (uint)PacketType.Disconnect);
+        MemoryMarshal.Write(message.Slice(4), conversationId);
         lock (gate)
         {
-            ikcp_release(kcp);
+            socket.Send(message);
+        }
+
+        stream.InputWriter.Complete(new KcpDisconnectedException());
+    }
+
+    public unsafe void Dispose()
+    {
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+
+    unsafe void Dispose(bool disposing)
+    {
+        Disconnect();
+
+        lock (gate)
+        {
+            if (isDisposed) return;
+            isDisposed = true;
+
+            if (disposing)
+            {
+                connectionCancellationTokenSource.Cancel();
+                connectionCancellationTokenSource.Dispose();
+
+                ikcp_release(kcp);
+                kcp = null;
+
+                if (remoteAddress == null) // ???
+                {
+                    socket.Dispose();
+                    socket = null!;
+                }
+
+                stream.Dispose();
+            }
+            else
+            {
+                // only cleanup unmanaged resource
+                ikcp_release(kcp);
+            }
         }
     }
+
+    ~KcpConnection()
+    {
+        Dispose(false);
+    }
+
 
     static unsafe int KcpOutputCallback(byte* buf, int len, IKCPCB* kcp, object user)
     {

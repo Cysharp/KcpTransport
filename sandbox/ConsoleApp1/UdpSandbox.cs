@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Net;
 using System.Text;
 using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
 
 namespace ConsoleApp1
 {
@@ -163,6 +164,39 @@ namespace ConsoleApp1
             }
         }
 
+
+
+
+        public static void UdpHelloClientDisposeLoop()
+        {
+            const string serverIP = "127.0.0.1";
+            const int serverPort = 11000;
+            const int bufferSize = 1024;
+
+            while (true)
+            {
+                using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+
+                Console.Write("Enter a message to send to the server: ");
+                string? message = Console.ReadLine();
+
+                byte[] data = Encoding.ASCII.GetBytes(message!);
+                socket.SendTo(data, new IPEndPoint(IPAddress.Parse(serverIP), serverPort));
+
+                Console.WriteLine("Message sent to the server.");
+
+                byte[] receivedData = new byte[bufferSize];
+                EndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
+                int receivedBytes = socket.ReceiveFrom(receivedData, ref remoteEP);
+                string response = Encoding.ASCII.GetString(receivedData, 0, receivedBytes);
+
+                Console.WriteLine($"Received response from {remoteEP}: {response}");
+
+                socket.Dispose();
+                Console.ReadLine();
+            }
+        }
+
         // use connect
         public static void UdpHelloClient2()
         {
@@ -189,6 +223,39 @@ namespace ConsoleApp1
                 string response = Encoding.ASCII.GetString(receivedData, 0, receivedBytes);
 
                 Console.WriteLine($"Received response from {remoteEP}: {response}");
+            }
+        }
+
+        public static void UdpHelloClient2DisposeLoop()
+        {
+            const string serverIP = "127.0.0.1";
+            const int serverPort = 11000;
+            const int bufferSize = 1024;
+
+            while (true)
+            {
+                using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+                socket.Connect(new IPEndPoint(IPAddress.Parse(serverIP), serverPort));
+
+                Console.Write("Enter a message to send to the server: ");
+                string? message = Console.ReadLine();
+
+                byte[] data = Encoding.ASCII.GetBytes(message!);
+                socket.Send(data);
+
+                Console.WriteLine("Message sent to the server.");
+
+                byte[] receivedData = new byte[bufferSize];
+                EndPoint remoteEP = new IPEndPoint(IPAddress.Any, 0);
+                int receivedBytes = socket.Receive(receivedData);
+                string response = Encoding.ASCII.GetString(receivedData, 0, receivedBytes);
+
+                Console.WriteLine($"Received response from {remoteEP}: {response}");
+
+
+                socket.Dispose();
+                Console.WriteLine("Socket id diposed, again");
+                Console.ReadLine();
             }
         }
 
