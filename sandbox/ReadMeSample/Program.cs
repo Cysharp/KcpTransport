@@ -43,7 +43,7 @@ static async Task RunEchoServer()
             }
             catch (KcpDisconnectedException)
             {
-                // when client has been disconnected, KcpDisconnectedException was thrown
+                // when client has been disconnected, ReadAsync will throw KcpDisconnectedException
                 Console.WriteLine($"Disconnected, Id:{connection.ConnectionId}");
             }
         }
@@ -53,25 +53,23 @@ static async Task RunEchoServer()
 static async Task RunEchoClient()
 {
     // Create KCP Client
-    var connection = await KcpConnection.ConnectAsync("127.0.0.1", 11000);
+    using var connection = await KcpConnection.ConnectAsync("127.0.0.1", 11000);
+    using var stream = await connection.OpenOutboundStreamAsync();
 
-    using (var stream = await connection.OpenOutboundStreamAsync())
+    var buffer = new byte[1024];
+    while (true)
     {
-        var buffer = new byte[1024];
-        while (true)
-        {
-            Console.Write("Input Text:");
-            var inputText = Console.ReadLine();
+        Console.Write("Input Text:");
+        var inputText = Console.ReadLine();
 
-            // Send to Server(KCP, Reliable), or use WriteUnreliableAsync
-            await stream.WriteAsync(Encoding.UTF8.GetBytes(inputText!));
+        // Send to Server(KCP, Reliable), or use WriteUnreliableAsync
+        await stream.WriteAsync(Encoding.UTF8.GetBytes(inputText!));
 
-            // Wait server response
-            var len = await stream.ReadAsync(buffer);
+        // Wait server response
+        var len = await stream.ReadAsync(buffer);
 
-            var str = Encoding.UTF8.GetString(buffer, 0, len);
+        var str = Encoding.UTF8.GetString(buffer, 0, len);
 
-            Console.WriteLine($"Client Response Received: " + str);
-        }
+        Console.WriteLine($"Client Response Received: " + str);
     }
 }
