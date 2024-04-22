@@ -12,7 +12,7 @@ KcpTransport is a Pure C# implementation of RUDP for high-performance real-time 
 
 * Variations of [RUDP](https://en.wikipedia.org/wiki/Reliable_User_Datagram_Protocol) have been widely adopted in applications that require real-time performance, which is difficult to achieve with TCP like gaming.
 * [QUIC](https://en.wikipedia.org/wiki/QUIC) is the future, but currently, it has difficulties with multi-platform support (especially for use on game consoles).
-* [KCP](https://github.com/skywind3000/kcp) has a proven track record in [games, audio, video, and more](https://www.skywind.me/blog/archives/2706), with Genshin Impact being a notable example of its adoption.
+* [KCP](https://github.com/skywind3000/kcp/blob/master/README.en.md) has a proven track record in [games, audio, video, and more](https://www.skywind.me/blog/archives/2706), with Genshin Impact being a notable example of its adoption.
 * KCP itself has a simple implementation without any system calls, allowing it to be implemented in Pure C# while leveraging the latest UDP Socket Improvements and async/await support in .NET.
 
 KcpTransport is built on top of KCP ported to Pure C#, with implementations of Syn Cookie handshake, connection management, Unreliable communication, and KeepAlive. In the future, encryption will also be supported.
