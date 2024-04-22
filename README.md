@@ -5,6 +5,9 @@
 
 KcpTransport is a Pure C# implementation of RUDP for high-performance real-time network communication. Similar to the implementation of [System.Net.Quic](https://learn.microsoft.com/en-us/dotnet/fundamentals/networking/quic/quic-overview), it provides `KcpListener`, `KcpConnection`, and `KcpStream`. All Read/Write Operations are handled in a Stream-based manner, just like [NetworkStream](https://learn.microsoft.com/en-us/dotnet/api/system.net.sockets.networkstream) in TCP, providing an easy-to-use and modern asynchronous API that supports async/await. Furthermore, by implementing the [ASP.NET Kestrel Transport](https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.server.kestrel.transport.sockets.sockettransportfactory?view=aspnetcore-8.0) in the future, the goal is to enable the replacement of the transport layer of gRPC and [MagicOnion](https://github.com/Cysharp/MagicOnion) with KCP.
 
+> [!CAUTION]
+> This library is currently in alpha preview. It cannot be used for production.
+
 ## Why KCP?
 
 * Variations of [RUDP](https://en.wikipedia.org/wiki/Reliable_User_Datagram_Protocol) have been widely adopted in applications that require real-time performance, which is difficult to achieve with TCP like gaming.
