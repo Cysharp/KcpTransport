@@ -549,11 +549,8 @@ public class KcpConnection : IDisposable
                 ikcp_release(kcp);
                 kcp = null;
 
-                if (remoteAddress == null) // ???
-                {
-                    socket.Dispose();
-                    socket = null!;
-                }
+                socket.Dispose();
+                socket = null!;
 
                 stream.Dispose();
             }
