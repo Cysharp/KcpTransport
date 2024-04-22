@@ -1,19 +1,20 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-      <IsPackable>false</IsPackable>
-  </PropertyGroup>
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <NoWarn>1701;1702;1998</NoWarn>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="DFrame" Version="1.1.4" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="DFrame" Version="1.1.4" />
+    </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\KcpTransport\KcpTransport.csproj" />
-  </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\KcpTransport\KcpTransport.csproj" />
+    </ItemGroup>
 
 </Project>
