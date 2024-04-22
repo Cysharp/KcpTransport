@@ -49,6 +49,7 @@ public class KcpConnection : IDisposable
     long lastPingSent;
     bool isDisposed;
 
+    public uint ConnectionId => conversationId;
     internal object SyncRoot => gate;
 
     // create by User(from KcpConnection.ConnectAsync), for client connection

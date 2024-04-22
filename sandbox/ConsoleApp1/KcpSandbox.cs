@@ -1,9 +1,6 @@
-﻿using System.Net.Sockets;
+﻿using KcpTransport;
 using System.Net;
 using System.Text;
-using static KcpTransport.LowLevel.KcpMethods;
-using KcpTransport.LowLevel;
-using KcpTransport;
 
 namespace ConsoleApp1;
 
@@ -17,8 +14,11 @@ internal class KcpSandbox
         var listener = await KcpListener.ListenAsync(new KcpListenerOptions
         {
             ListenEndPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), listenPort),
-            EventLoopCount = 1
+            EventLoopCount = 1,
+            KeepAliveDelay = TimeSpan.FromSeconds(10),
+            ConnectionTimeout = TimeSpan.FromSeconds(20),
         });
+
         while (true)
         {
             var conn = await listener.AcceptConnectionAsync();

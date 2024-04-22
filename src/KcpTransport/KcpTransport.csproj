@@ -5,6 +5,13 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>1701;1702;1591;1573</NoWarn>
+
+        <!-- NuGet Packaging -->
+        <PackageTags>rudp</PackageTags>
+        <Description>KcpTransport is a Pure C# implementation of RUDP for high-performance real-time network communication.</Description>
     </PropertyGroup>
 
     <ItemGroup>

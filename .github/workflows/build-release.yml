@@ -1,0 +1,41 @@
+name: Build-Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "tag: git tag you want create. (sample 1.0.0)"
+        required: true
+      dry-run:
+        description: "dry-run: true will never create relase/nuget."
+        required: true
+        default: false
+        type: boolean
+
+jobs:
+  build-dotnet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Cysharp/Actions/.github/actions/setup-dotnet@main
+      - run: dotnet build -c Release -p:Version=${{ inputs.tag }}
+      - run: dotnet test -c Release --no-build
+      - run: dotnet pack -c Release --no-build -p:Version=${{ inputs.tag }} -o ./publish
+      # Store artifacts.
+      - uses: actions/upload-artifact@v2
+        with:
+          name: nuget
+          path: ./publish/
+
+  # release
+  create-release:
+    needs: [build-dotnet]
+    uses: Cysharp/Actions/.github/workflows/create-release.yaml@main
+    with:
+      commit-id: ''
+      dry-run: ${{ inputs.dry-run }}
+      tag: ${{ inputs.tag }}
+      nuget-push: true
+      release-upload: false
+    secrets: inherit
