@@ -11,6 +11,7 @@
 
     <ItemGroup>
         <PackageReference Include="DFrame" Version="1.1.4" />
+        <PackageReference Include="ZLogger" Version="2.4.1" />
     </ItemGroup>
 
     <ItemGroup>

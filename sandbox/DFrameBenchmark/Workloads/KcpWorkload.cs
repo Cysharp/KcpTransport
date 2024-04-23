@@ -6,21 +6,21 @@ namespace DFrameBenchmark.Workloads;
 
 public class KcpServer
 {
-    public static async Task RunEchoAsync()
+    public static async Task RunEchoAsync(CancellationToken cancellationToken)
     {
-        var listener = await KcpListener.ListenAsync(new KcpListenerOptions
+        using var listener = await KcpListener.ListenAsync(new KcpListenerOptions
         {
             ListenEndPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 5027),
             // EventLoopCount = 1
         });
 
-        while (true)
+        while (!cancellationToken.IsCancellationRequested)
         {
             var conn = await listener.AcceptConnectionAsync();
-            ConsumeClient(conn);
+            ConsumeClient(conn, cancellationToken);
         }
 
-        static async void ConsumeClient(KcpConnection connection)
+        static async void ConsumeClient(KcpConnection connection, CancellationToken cancellationToken)
         {
             using (connection)
             using (var stream = await connection.OpenOutboundStreamAsync())
@@ -30,17 +30,19 @@ public class KcpServer
                     var buffer = new byte[1024];
                     while (true)
                     {
-                        var len = await stream.ReadAsync(buffer);
+                        var len = await stream.ReadAsync(buffer, cancellationToken);
                         if (len == 0)
                         {
                             return;
                         }
-                        await stream.WriteAsync(buffer.AsMemory(0, len));
+                        await stream.WriteAsync(buffer.AsMemory(0, len), cancellationToken);
                     }
                 }
-                catch (Exception ex)
+                catch (OperationCanceledException)
                 {
-                    Console.WriteLine(ex);
+                }
+                catch (KcpDisconnectedException)
+                {
                 }
             }
         }

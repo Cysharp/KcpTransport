@@ -6,42 +6,38 @@ namespace DFrameBenchmark.Workloads;
 
 public class TcpServer
 {
-    public static async Task RunEchoAsync()
+    public static async Task RunEchoAsync(CancellationToken cancellationToken)
     {
-        Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         socket.Blocking = false;
         socket.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), 5027));
         socket.Listen();
 
-        while (true)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            var conn = await socket.AcceptAsync(CancellationToken.None);
-            ConsumeClient(conn);
+            var conn = await socket.AcceptAsync(cancellationToken);
+            ConsumeClient(conn, cancellationToken);
         }
 
-        static async void ConsumeClient(Socket socket)
+        static async void ConsumeClient(Socket socket, CancellationToken cancellationToken)
         {
-            var timeout = new CancellationTokenSource();
             using (socket)
             {
                 try
                 {
                     var buffer = new byte[1024];
-                    while (true)
+                    while (!cancellationToken.IsCancellationRequested)
                     {
-                        timeout.TryReset();
-                        timeout.CancelAfter(TimeSpan.FromSeconds(5));
-                        var len = await socket.ReceiveAsync(buffer.AsMemory(), timeout.Token);
+                        var len = await socket.ReceiveAsync(buffer.AsMemory(), cancellationToken);
                         if (len == 0)
                         {
                             return; // end.
                         }
-                        await socket.SendAsync(buffer.AsMemory(0, len), timeout.Token);
+                        await socket.SendAsync(buffer.AsMemory(0, len), cancellationToken);
                     }
                 }
-                catch (Exception ex)
+                catch (OperationCanceledException)
                 {
-                    Console.WriteLine(ex);
                 }
             }
         }
@@ -64,7 +60,7 @@ public class TcpWorkload : Workload
 
     public override async Task ExecuteAsync(WorkloadContext context)
     {
-        await socket.SendAsync(msg.AsMemory());
+        await socket.SendAsync(msg.AsMemory(), context.CancellationToken);
         var len = await socket.ReceiveAsync(buffer.AsMemory(), context.CancellationToken);
         if (!buffer.AsSpan(0, len).SequenceEqual(msg))
         {

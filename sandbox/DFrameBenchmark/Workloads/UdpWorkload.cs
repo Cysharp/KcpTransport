@@ -6,9 +6,9 @@ namespace DFrameBenchmark.Workloads;
 
 public class UdpServer
 {
-    public static async Task RunEchoAsync()
+    public static async Task RunEchoAsync(CancellationToken cancellationToken)
     {
-        Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
         socket.Blocking = false;
         socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
         if (OperatingSystem.IsWindows())
@@ -23,24 +23,24 @@ public class UdpServer
 
         var buffer = new byte[1400];
         var address = new SocketAddress(AddressFamily.InterNetwork);
-        while (true)
+        while (!cancellationToken.IsCancellationRequested)
         {
-            var len = await socket.ReceiveFromAsync(buffer.AsMemory(), SocketFlags.None, address);
-            await socket.SendToAsync(buffer.AsMemory(0, len), SocketFlags.None, address);
+            var len = await socket.ReceiveFromAsync(buffer.AsMemory(), SocketFlags.None, address, cancellationToken);
+            await socket.SendToAsync(buffer.AsMemory(0, len), SocketFlags.None, address, cancellationToken);
         }
     }
-    
-    public static async Task RunEchoMultiAsync()
+
+    public static async Task RunEchoMultiAsync(CancellationToken cancellationToken)
     {
         List<Task> tasks = new();
 
         var engineCount = Environment.ProcessorCount / 2;
         for (int i = 0; i < engineCount; i++)
         {
-            tasks.Add(RunEchoAsync());
+            tasks.Add(RunEchoAsync(cancellationToken));
         }
 
-        await await Task.WhenAny(tasks);
+        await Task.WhenAll(tasks);
     }
 }
 
@@ -68,7 +68,7 @@ public class UdpWorkload : Workload
 
     public override async Task ExecuteAsync(WorkloadContext context)
     {
-        await socket.SendAsync(msg.AsMemory());
+        await socket.SendAsync(msg.AsMemory(), context.CancellationToken);
 
         var len = await socket.ReceiveAsync(buffer.AsMemory(), context.CancellationToken);
         if (!buffer.AsSpan(0, len).SequenceEqual(msg))
