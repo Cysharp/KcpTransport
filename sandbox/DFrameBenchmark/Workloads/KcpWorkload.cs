@@ -11,12 +11,12 @@ public class KcpServer
         using var listener = await KcpListener.ListenAsync(new KcpListenerOptions
         {
             ListenEndPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), 5027),
-            // EventLoopCount = 1
+            EventLoopCount = 1
         });
 
         while (!cancellationToken.IsCancellationRequested)
         {
-            var conn = await listener.AcceptConnectionAsync();
+            var conn = await listener.AcceptConnectionAsync(cancellationToken);
             ConsumeClient(conn, cancellationToken);
         }
 

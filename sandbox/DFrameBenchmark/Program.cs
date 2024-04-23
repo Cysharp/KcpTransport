@@ -18,7 +18,7 @@ builder.ConfigureController(x =>
 
 builder.ConfigureWorker(x =>
 {
-    x.VirtualProcess = 16;
+    x.VirtualProcess = 1;
     x.WorkloadAssemblies = [typeof(UdpWorkload).Assembly];
 });
 
@@ -85,12 +85,15 @@ internal class ServerRunner(ILogger<ServerRunner> logger, ISubscriber<Controller
             else if (x.MessageType == ControllerEventMessageType.WorkflowCompleted)
             {
                 linkedTokenSource?.Cancel();
-                try
+                if (serverTask != null)
                 {
-                    serverTask?.Wait();
-                }
-                catch
-                {
+                    try
+                    {
+                        serverTask?.Wait();
+                    }
+                    catch
+                    {
+                    }
                     logger.ZLogInformation($"Server Stopped.");
                 }
             }

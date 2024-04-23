@@ -135,7 +135,7 @@ public sealed class KcpListener : IDisposable, IAsyncDisposable
 
     async Task StartSocketEventLoopAsync(KcpListenerOptions options, int id)
     {
-        await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+        // await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
 
         var receivedAddress = new SocketAddress(options.ListenEndPoint.AddressFamily);
         var random = new Random();
@@ -143,7 +143,7 @@ public sealed class KcpListener : IDisposable, IAsyncDisposable
 
         var socketBuffer = GC.AllocateUninitializedArray<byte>(options.MaximumTransmissionUnit, pinned: true); // Create to pinned object heap
 
-        while (true)
+        while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
@@ -281,12 +281,11 @@ public sealed class KcpListener : IDisposable, IAsyncDisposable
                         break;
                 }
             }
-            catch (SocketException ex)
+            catch (Exception ex)
             {
                 // TODO: log?
             }
         }
-
 
         static void SendHandshakeInitialResponse(Socket socket, SocketAddress clientAddress, uint conversationId, uint cookie, long timestamp)
         {
@@ -386,6 +385,7 @@ public sealed class KcpListener : IDisposable, IAsyncDisposable
         // wait loop complete
         try
         {
+            var curr = SynchronizationContext.Current;
             await Task.WhenAll(socketEventLoopTasks);
         }
         catch { }
