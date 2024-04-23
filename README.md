@@ -194,10 +194,10 @@ public class SampleLowLevel : IDisposable
     readonly long startingTimestamp;
 
     // void* is user, you can cast by GCHandle.FromIntPtr((IntPtr)ptr).Target
-    public unsafe SampleLowLevel(delegate* managed<byte*, int, IKCPCB*, void*, int> output, object user)
+    public unsafe SampleLowLevel(uint conversationId, delegate* managed<byte*, int, IKCPCB*, void*, int> output, object user)
     {
         this.user = GCHandle.Alloc(this);
-        this.kcp = ikcp_create(conv: 0, user: (void*)GCHandle.ToIntPtr(this.user));
+        this.kcp = ikcp_create(conv: conversationId, user: (void*)GCHandle.ToIntPtr(this.user));
         ikcp_setoutput(kcp, output);
         this.startingTimestamp = Stopwatch.GetTimestamp();
         Update();
