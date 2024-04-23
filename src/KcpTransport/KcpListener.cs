@@ -284,6 +284,7 @@ public sealed class KcpListener : IDisposable, IAsyncDisposable
             catch (Exception ex)
             {
                 // TODO: log?
+                _ = ex;
             }
         }
 

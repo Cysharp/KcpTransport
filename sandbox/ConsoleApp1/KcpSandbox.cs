@@ -56,7 +56,7 @@ internal class KcpSandbox
 
             var buffer = new byte[1024];
             var stream = await connection.OpenOutboundStreamAsync();
-            //while (true)
+            while (true)
             {
                 // var inputText = Console.ReadLine();
                 var inputText = id + ":" + Random.Shared.Next().ToString();
@@ -76,12 +76,6 @@ internal class KcpSandbox
                     Console.WriteLine("NG");
                     throw new Exception("Invalid Data Received");
                 }
-
-                //connection.Disconnect();
-                // await Task.Delay(1000);
-                connection.Dispose();
-
-                Console.Read();
             }
         }
     }

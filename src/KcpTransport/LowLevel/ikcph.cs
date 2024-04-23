@@ -124,17 +124,15 @@ public unsafe struct IKCPCB
     public IUINT32* acklist;
     public IUINT32 ackcount;
     public IUINT32 ackblock;
-    // public object user; // avoid store managed object
+    public void* user;
     public byte* buffer;
     public int fastresend;
     public int fastlimit;
     public int nocwnd, stream;
     public int logmask;
 
-    public delegate* managed<byte*, int, IKCPCB*, object, int> output; // pass user in argument
+    public delegate* managed<byte*, int, IKCPCB*, void*, int> output;
     public delegate* managed<string, IKCPCB*, void> writelog;
-    //public output_callback output;
-    //public writelog_callback writelog;
 };
 
 internal static class KcpConfigurations

@@ -19,28 +19,28 @@ public static unsafe class KcpMethods
     // KCP BASIC
     //=====================================================================
 
-    internal const IUINT32 IKCP_RTO_NDL = 30;        // no delay min rto
-    internal const IUINT32 IKCP_RTO_MIN = 100;       // normal min rto
-    internal const IUINT32 IKCP_RTO_DEF = 200;       // RTO default
-    internal const IUINT32 IKCP_RTO_MAX = 60000;
-    internal const IUINT32 IKCP_CMD_PUSH = 81;       // cmd: push data
-    internal const IUINT32 IKCP_CMD_ACK = 82;        // cmd: ack
-    internal const IUINT32 IKCP_CMD_WASK = 83;       // cmd: window probe (ask)
-    internal const IUINT32 IKCP_CMD_WINS = 84;       // cmd: window size (tell)
-    internal const IUINT32 IKCP_ASK_SEND = 1;        // need to send IKCP_CMD_WASK
-    internal const IUINT32 IKCP_ASK_TELL = 2;        // need to send IKCP_CMD_WINS
-    internal const IUINT32 IKCP_WND_SND = 32;
-    internal const IUINT32 IKCP_WND_RCV = 128;       // must >= max fragment size
-    internal const IUINT32 IKCP_MTU_DEF = 1400;      // default MTU(Maximum Transmission Unit)
-    internal const IUINT32 IKCP_ACK_FAST = 3;
-    internal const IUINT32 IKCP_INTERVAL = 100;
-    internal const IUINT32 IKCP_OVERHEAD = 24;
-    internal const IUINT32 IKCP_DEADLINK = 20;
-    internal const IUINT32 IKCP_THRESH_INIT = 2;
-    internal const IUINT32 IKCP_THRESH_MIN = 2;
-    internal const IUINT32 IKCP_PROBE_INIT = 7000;       // 7 secs to probe window size
-    internal const IUINT32 IKCP_PROBE_LIMIT = 120000;    // up to 120 secs to probe window
-    internal const IUINT32 IKCP_FASTACK_LIMIT = 5;       // max times to trigger fastack
+    public const IUINT32 IKCP_RTO_NDL = 30;        // no delay min rto
+    public const IUINT32 IKCP_RTO_MIN = 100;       // normal min rto
+    public const IUINT32 IKCP_RTO_DEF = 200;       // RTO default
+    public const IUINT32 IKCP_RTO_MAX = 60000;
+    public const IUINT32 IKCP_CMD_PUSH = 81;       // cmd: push data
+    public const IUINT32 IKCP_CMD_ACK = 82;        // cmd: ack
+    public const IUINT32 IKCP_CMD_WASK = 83;       // cmd: window probe (ask)
+    public const IUINT32 IKCP_CMD_WINS = 84;       // cmd: window size (tell)
+    public const IUINT32 IKCP_ASK_SEND = 1;        // need to send IKCP_CMD_WASK
+    public const IUINT32 IKCP_ASK_TELL = 2;        // need to send IKCP_CMD_WINS
+    public const IUINT32 IKCP_WND_SND = 32;
+    public const IUINT32 IKCP_WND_RCV = 128;       // must >= max fragment size
+    public const IUINT32 IKCP_MTU_DEF = 1400;      // default MTU(Maximum Transmission Unit)
+    public const IUINT32 IKCP_ACK_FAST = 3;
+    public const IUINT32 IKCP_INTERVAL = 100;
+    public const IUINT32 IKCP_OVERHEAD = 24;
+    public const IUINT32 IKCP_DEADLINK = 20;
+    public const IUINT32 IKCP_THRESH_INIT = 2;
+    public const IUINT32 IKCP_THRESH_MIN = 2;
+    public const IUINT32 IKCP_PROBE_INIT = 7000;       // 7 secs to probe window size
+    public const IUINT32 IKCP_PROBE_LIMIT = 120000;    // up to 120 secs to probe window
+    public const IUINT32 IKCP_FASTACK_LIMIT = 5;       // max times to trigger fastack
 
 
     //---------------------------------------------------------------------
@@ -244,7 +244,7 @@ public static unsafe class KcpMethods
     //}
 
     // output segment
-    static int ikcp_output(ikcpcb* kcp, void* data, int size, object user)
+    static int ikcp_output(ikcpcb* kcp, void* data, int size)
     {
         assert(kcp);
         // assert(kcp->output);
@@ -254,7 +254,7 @@ public static unsafe class KcpMethods
         //}
         ikcp_log(kcp, "[RO] {0} bytes", (long)size);
         if (size == 0) return 0;
-        return kcp->output((byte*)data, size, kcp, user);
+        return kcp->output((byte*)data, size, kcp, kcp->user);
     }
 
     // output queue
@@ -275,13 +275,13 @@ public static unsafe class KcpMethods
     //---------------------------------------------------------------------
     // create a new kcpcb
     //---------------------------------------------------------------------
-    public static ikcpcb* ikcp_create(IUINT32 conv)
+    public static ikcpcb* ikcp_create(IUINT32 conv, void* user)
     {
         ikcpcb* kcp = (ikcpcb*)ikcp_malloc(sizeof(ikcpcb));
 
         if (kcp == null) return null;
         kcp->conv = conv;
-        // kcp->user = user;
+        kcp->user = user;
         kcp->snd_una = 0;
         kcp->snd_nxt = 0;
         kcp->rcv_nxt = 0;
@@ -398,11 +398,10 @@ public static unsafe class KcpMethods
     //---------------------------------------------------------------------
     // set output callback, which will be invoked by kcp
     //---------------------------------------------------------------------
-    //public static void ikcp_setoutput(ikcpcb* kcp, output_callback output)
-    //{
-    //    kcp->output = output;
-    //}
-
+    public static void ikcp_setoutput(ikcpcb* kcp, delegate* managed<byte*, int, IKCPCB*, void*, int> output)
+    {
+        kcp->output = output;
+    }
 
     //---------------------------------------------------------------------
     // user/upper level recv: returns size, returns below zero for EAGAIN
@@ -1069,7 +1068,7 @@ public static unsafe class KcpMethods
     //---------------------------------------------------------------------
     // ikcp_flush
     //---------------------------------------------------------------------
-    public static void ikcp_flush(ikcpcb* kcp, object user)
+    public static void ikcp_flush(ikcpcb* kcp)
     {
         IUINT32 current = kcp->current;
         byte* buffer = kcp->buffer;
@@ -1102,7 +1101,7 @@ public static unsafe class KcpMethods
             size = (int)(ptr - buffer);
             if (size + (int)IKCP_OVERHEAD > (int)kcp->mtu)
             {
-                ikcp_output(kcp, buffer, size, user);
+                ikcp_output(kcp, buffer, size);
                 ptr = buffer;
             }
             ikcp_ack_get(kcp, i, &seg.sn, &seg.ts);
@@ -1146,7 +1145,7 @@ public static unsafe class KcpMethods
             size = (int)(ptr - buffer);
             if (size + (int)IKCP_OVERHEAD > (int)kcp->mtu)
             {
-                ikcp_output(kcp, buffer, size, user);
+                ikcp_output(kcp, buffer, size);
                 ptr = buffer;
             }
             ptr = ikcp_encode_seg(ptr, &seg);
@@ -1159,7 +1158,7 @@ public static unsafe class KcpMethods
             size = (int)(ptr - buffer);
             if (size + (int)IKCP_OVERHEAD > (int)kcp->mtu)
             {
-                ikcp_output(kcp, buffer, size, user);
+                ikcp_output(kcp, buffer, size);
                 ptr = buffer;
             }
             ptr = ikcp_encode_seg(ptr, &seg);
@@ -1254,7 +1253,7 @@ public static unsafe class KcpMethods
 
                 if (size + need > (int)kcp->mtu)
                 {
-                    ikcp_output(kcp, buffer, size, user);
+                    ikcp_output(kcp, buffer, size);
                     ptr = buffer;
                 }
 
@@ -1277,7 +1276,7 @@ public static unsafe class KcpMethods
         size = (int)(ptr - buffer);
         if (size > 0)
         {
-            ikcp_output(kcp, buffer, size, user);
+            ikcp_output(kcp, buffer, size);
         }
 
         // update ssthresh
@@ -1313,7 +1312,7 @@ public static unsafe class KcpMethods
     // ikcp_check when to call it again (without ikcp_input/_send calling).
     // 'current' - current timestamp in millisec. 
     //---------------------------------------------------------------------
-    public static void ikcp_update(ikcpcb* kcp, IUINT32 current, object user)
+    public static void ikcp_update(ikcpcb* kcp, IUINT32 current)
     {
         IINT32 slap;
 
@@ -1340,7 +1339,7 @@ public static unsafe class KcpMethods
             {
                 kcp->ts_flush = kcp->current + kcp->interval;
             }
-            ikcp_flush(kcp, user);
+            ikcp_flush(kcp);
         }
     }
 

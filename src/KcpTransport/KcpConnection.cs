@@ -57,7 +57,7 @@ public class KcpConnection : IDisposable
     {
         this.conversationId = conversationId;
         this.keepAliveDelay = options.KeepAliveDelay;
-        this.kcp = ikcp_create(conversationId);
+        this.kcp = ikcp_create(conversationId, GCHandle.ToIntPtr(GCHandle.Alloc(this)).ToPointer());
         this.kcp->output = &KcpOutputCallback;
         ConfigKcpWorkMode(options.EnableNoDelay, options.IntervalMilliseconds, options.Resend, options.EnableFlowControl);
         ConfigKcpWindowSize(options.WindowSize.SendWindow, options.WindowSize.ReceiveWindow);
@@ -84,7 +84,7 @@ public class KcpConnection : IDisposable
     {
         this.conversationId = conversationId;
         this.keepAliveDelay = options.KeepAliveDelay;
-        this.kcp = ikcp_create(conversationId);
+        this.kcp = ikcp_create(conversationId, GCHandle.ToIntPtr(GCHandle.Alloc(this)).ToPointer());
         this.kcp->output = &KcpOutputCallback;
         ConfigKcpWorkMode(options.EnableNoDelay, options.IntervalMilliseconds, options.Resend, options.EnableFlowControl);
         ConfigKcpWindowSize(options.WindowSize.SendWindow, options.WindowSize.ReceiveWindow);
@@ -365,19 +365,19 @@ public class KcpConnection : IDisposable
         {
             if (isDisposed) return;
 
-            ikcp_flush(kcp, this);
+            ikcp_flush(kcp);
         }
     }
 
     internal unsafe void UpdateKcp()
     {
         var elapsed = Stopwatch.GetElapsedTime(startingTimestamp);
-        var currentTimestampMillisec = (uint)elapsed.TotalMilliseconds;
+        var currentTimestampMilliseconds = (uint)elapsed.TotalMilliseconds;
         lock (gate)
         {
             if (isDisposed) return;
 
-            ikcp_update(kcp, currentTimestampMillisec, this);
+            ikcp_update(kcp, currentTimestampMilliseconds);
         }
     }
 
@@ -547,6 +547,7 @@ public class KcpConnection : IDisposable
                 connectionCancellationTokenSource.Cancel();
                 connectionCancellationTokenSource.Dispose();
 
+                GCHandle.FromIntPtr((nint)kcp->user).Free();
                 ikcp_release(kcp);
                 kcp = null;
 
@@ -558,6 +559,7 @@ public class KcpConnection : IDisposable
             else
             {
                 // only cleanup unmanaged resource
+                GCHandle.FromIntPtr((nint)kcp->user).Free();
                 ikcp_release(kcp);
             }
         }
@@ -569,9 +571,9 @@ public class KcpConnection : IDisposable
     }
 
 
-    static unsafe int KcpOutputCallback(byte* buf, int len, IKCPCB* kcp, object user)
+    static unsafe int KcpOutputCallback(byte* buf, int len, IKCPCB* kcp, void* user)
     {
-        var self = (KcpConnection)user;
+        var self = (KcpConnection)GCHandle.FromIntPtr((IntPtr)user).Target!;
         var buffer = new Span<byte>(buf, len);
 
         var sent = self.socket.Send(buffer);
