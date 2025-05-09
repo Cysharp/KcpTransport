@@ -8,6 +8,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using KcpTransport.Fallbacks;
 using static KcpTransport.LowLevel.KcpMethods;
 
 namespace KcpTransport
@@ -140,13 +141,13 @@ namespace KcpTransport
             static void SendHandshakeInitialRequest(Socket socket)
             {
                 Span<byte> data = stackalloc byte[4];
-                MemoryMarshal.Write(data, (uint)PacketType.HandshakeInitialRequest);
+                MemoryMarshalFallback.Write(data, (uint)PacketType.HandshakeInitialRequest);
                 socket.Send(data);
             }
 
             static void SendHandshakeOkRequest(Socket socket, Span<byte> data)
             {
-                MemoryMarshal.Write(data, (uint)PacketType.HandshakeOkRequest);
+                MemoryMarshalFallback.Write(data, (uint)PacketType.HandshakeOkRequest);
                 socket.Send(data);
             }
         }
@@ -336,8 +337,8 @@ namespace KcpTransport
             try
             {
                 var span = rent.AsSpan();
-                MemoryMarshal.Write(span, (uint)PacketType.Unreliable);
-                MemoryMarshal.Write(span.Slice(4), kcp->conv);
+                MemoryMarshalFallback.Write(span, (uint)PacketType.Unreliable);
+                MemoryMarshalFallback.Write(span.Slice(4), kcp->conv);
                 buffer.CopyTo(span.Slice(8));
 
                 lock (gate)
@@ -408,8 +409,8 @@ namespace KcpTransport
                 {
                     lastPingSent = currentTimestamp;
                     Span<byte> pingBuffer = stackalloc byte[8];
-                    MemoryMarshal.Write(pingBuffer, (uint)PacketType.Ping);
-                    MemoryMarshal.Write(pingBuffer.Slice(4), conversationId);
+                    MemoryMarshalFallback.Write(pingBuffer, (uint)PacketType.Ping);
+                    MemoryMarshalFallback.Write(pingBuffer.Slice(4), conversationId);
                     lock (gate)
                     {
                         if (isDisposed) return;
@@ -426,8 +427,8 @@ namespace KcpTransport
 
             // send Pong
             Span<byte> pongBuffer = stackalloc byte[8];
-            MemoryMarshal.Write(pongBuffer, (uint)PacketType.Pong);
-            MemoryMarshal.Write(pongBuffer.Slice(4), conversationId);
+            MemoryMarshalFallback.Write(pongBuffer, (uint)PacketType.Pong);
+            MemoryMarshalFallback.Write(pongBuffer.Slice(4), conversationId);
 
             lock (gate)
             {
@@ -511,8 +512,8 @@ namespace KcpTransport
 
             // Send disconnect message
             Span<byte> message = stackalloc byte[8];
-            MemoryMarshal.Write(message, (uint)PacketType.Disconnect);
-            MemoryMarshal.Write(message.Slice(4), conversationId);
+            MemoryMarshalFallback.Write(message, (uint)PacketType.Disconnect);
+            MemoryMarshalFallback.Write(message.Slice(4), conversationId);
             lock (gate)
             {
                 socket.Send(message);

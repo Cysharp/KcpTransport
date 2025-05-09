@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Threading.Channels;
+using KcpTransport.Fallbacks;
 
 namespace KcpTransport
 {
@@ -285,24 +286,24 @@ namespace KcpTransport
             static void SendHandshakeInitialResponse(Socket socket, SocketAddress clientAddress, uint conversationId, uint cookie, long timestamp)
             {
                 Span<byte> data = stackalloc byte[20]; // type(4) + conv(4) + cookie(4) + timestamp(8)
-                MemoryMarshal.Write(data, (uint)PacketType.HandshakeInitialResponse);
-                MemoryMarshal.Write(data.Slice(4), conversationId);
-                MemoryMarshal.Write(data.Slice(8), cookie);
-                MemoryMarshal.Write(data.Slice(12), timestamp);
+                MemoryMarshalFallback.Write(data, (uint)PacketType.HandshakeInitialResponse);
+                MemoryMarshalFallback.Write(data.Slice(4), conversationId);
+                MemoryMarshalFallback.Write(data.Slice(8), cookie);
+                MemoryMarshalFallback.Write(data.Slice(12), timestamp);
                 socket.SendTo(data, SocketFlags.None, clientAddress);
             }
 
             static void SendHandshakeOkResponse(Socket socket, SocketAddress clientAddress)
             {
                 Span<byte> data = stackalloc byte[4];
-                MemoryMarshal.Write(data, (uint)PacketType.HandshakeOkResponse);
+                MemoryMarshalFallback.Write(data, (uint)PacketType.HandshakeOkResponse);
                 socket.SendTo(data, SocketFlags.None, clientAddress);
             }
 
             static void SendHandshakeNgResponse(Socket socket, SocketAddress clientAddress)
             {
                 Span<byte> data = stackalloc byte[4];
-                MemoryMarshal.Write(data, (uint)PacketType.HandshakeNgResponse);
+                MemoryMarshalFallback.Write(data, (uint)PacketType.HandshakeNgResponse);
                 socket.SendTo(data, SocketFlags.None, clientAddress);
             }
         }

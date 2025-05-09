@@ -2,6 +2,7 @@
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using KcpTransport.Fallbacks;
 
 namespace KcpTransport
 {
@@ -37,10 +38,10 @@ namespace KcpTransport
             Span<byte> source = stackalloc byte[remoteAddress.Size + 8];
 
             remoteAddress.Buffer.Span.CopyTo(source);
-            MemoryMarshal.Write(source.Slice(remoteAddress.Size), timestamp);
+            MemoryMarshalFallback.Write(source.Slice(remoteAddress.Size), timestamp);
 
             Span<byte> dest = stackalloc byte[HMACSHA256.HashSizeInBytes];
-            HMACSHA256.TryHashData(hashKey, source, dest, out _);
+            HMACSHA256Fallback.TryHashData(hashKey, source, dest, out _);
 
             return MemoryMarshal.Read<uint>(dest);
         }
