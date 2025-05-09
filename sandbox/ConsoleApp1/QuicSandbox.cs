@@ -3,6 +3,8 @@ using System.Net.Quic;
 using System.Net.Security;
 using System.Runtime.Versioning;
 
+#pragma warning disable CA2252
+
 namespace ConsoleApp1;
 
 
@@ -127,7 +129,7 @@ internal class QuicSandbox
             var incomingStream = await connection.AcceptInboundStreamAsync();
 
 
-            
+
 
             // Work with the incoming stream ...
         }
