@@ -35,7 +35,11 @@ namespace KcpTransport
     {
         static readonly byte[] DefaultRandomHashKey = RandomNumberGenerator.GetBytes(32);
 
-        public required IPEndPoint ListenEndPoint { get; set; }
+        public
+#if NET7_0_OR_GREATER
+            required
+#endif
+            IPEndPoint ListenEndPoint { get; set; }
         public TimeSpan UpdatePeriod { get; set; } = TimeSpan.FromMilliseconds(5);
         public int EventLoopCount { get; set; } = Math.Max(1, Environment.ProcessorCount / 2);
         public bool ConfigureAwait { get; set; } = false;
@@ -123,7 +127,13 @@ namespace KcpTransport
 
         public ValueTask<KcpConnection> AcceptConnectionAsync(CancellationToken cancellationToken = default)
         {
+#if NET7_0_OR_GREATER
             ObjectDisposedException.ThrowIf(isDisposed, this);
+#else
+            if (isDisposed)
+                throw new ObjectDisposedException(GetType().FullName);
+#endif
+
             return acceptQueue.Reader.ReadAsync(cancellationToken);
         }
 

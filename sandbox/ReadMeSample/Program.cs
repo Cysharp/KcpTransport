@@ -3,6 +3,7 @@ using KcpTransport.LowLevel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using KcpTransport.Fallbacks;
 using static KcpTransport.LowLevel.KcpMethods;
 
 var server = RunEchoServer();
@@ -126,7 +127,7 @@ public class SampleLowLevel : IDisposable
 
     public unsafe void Update()
     {
-        var elapsed = Stopwatch.GetElapsedTime(startingTimestamp);
+        var elapsed = StopwatchFallback.GetElapsedTime(startingTimestamp);
         var currentTimestampMilliseconds = (uint)elapsed.TotalMilliseconds;
         ikcp_update(kcp, currentTimestampMilliseconds);
     }

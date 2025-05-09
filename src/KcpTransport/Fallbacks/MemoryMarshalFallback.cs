@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace KcpTransport.Fallbacks
 {
-    internal static class MemoryMarshalFallback
+    public static class MemoryMarshalFallback
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Write<T>(Span<byte> destination, in T value) where T : struct

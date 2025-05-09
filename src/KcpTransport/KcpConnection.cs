@@ -15,7 +15,11 @@ namespace KcpTransport
 {
     public sealed record class KcpClientConnectionOptions : KcpOptions
     {
-        public required EndPoint RemoteEndPoint { get; set; }
+        public
+#if NET7_0_OR_GREATER
+            required
+#endif
+            EndPoint RemoteEndPoint { get; set; }
         public TimeSpan UpdatePeriod { get; set; } = TimeSpan.FromMilliseconds(5);
         public bool ConfigureAwait { get; set; } = false;
         public TimeSpan KeepAliveDelay { get; set; } = TimeSpan.FromSeconds(20);
@@ -123,13 +127,13 @@ namespace KcpTransport
 
             // TODO: retry?
             var handshakeBuffer = new byte[20];
-            var received = await socket.ReceiveAsync(handshakeBuffer);
+            var received = await socket.ReceiveAsync(handshakeBuffer, SocketFlags.None);
             if (received != 20) throw new Exception();
 
             var conversationId = MemoryMarshal.Read<uint>(handshakeBuffer.AsSpan(4));
             SendHandshakeOkRequest(socket, handshakeBuffer);
 
-            var received2 = await socket.ReceiveAsync(handshakeBuffer);
+            var received2 = await socket.ReceiveAsync(handshakeBuffer, SocketFlags.None);
             if (received2 != 4) throw new Exception();
             var responseCode = (PacketType)MemoryMarshal.Read<uint>(handshakeBuffer);
 
@@ -371,7 +375,7 @@ namespace KcpTransport
 
         internal unsafe void UpdateKcp()
         {
-            var elapsed = Stopwatch.GetElapsedTime(startingTimestamp);
+            var elapsed = StopwatchFallback.GetElapsedTime(startingTimestamp);
             var currentTimestampMilliseconds = (uint)elapsed.TotalMilliseconds;
             lock (gate)
             {
@@ -392,7 +396,7 @@ namespace KcpTransport
                 return false;
             }
 
-            var elapsed = Stopwatch.GetElapsedTime(lastReceivedTimestamp, currentTimestamp);
+            var elapsed = StopwatchFallback.GetElapsedTime(lastReceivedTimestamp, currentTimestamp);
             if (elapsed < timeout)
             {
                 return true;
@@ -405,11 +409,11 @@ namespace KcpTransport
         {
             if (isDisposed) return;
 
-            var elapsed = Stopwatch.GetElapsedTime(lastReceivedTimestamp, currentTimestamp);
+            var elapsed = StopwatchFallback.GetElapsedTime(lastReceivedTimestamp, currentTimestamp);
             if (elapsed > keepAliveDelay)
             {
                 // send ping per 5 seconds.
-                var ping = Stopwatch.GetElapsedTime(lastPingSent, currentTimestamp);
+                var ping = StopwatchFallback.GetElapsedTime(lastPingSent, currentTimestamp);
                 if (ping > PingInterval)
                 {
                     lastPingSent = currentTimestamp;

@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 
 namespace KcpTransport.Fallbacks
 {
-    internal static unsafe class HMACSHA256Fallback
+    public static unsafe class HMACSHA256Fallback
     {
         public static bool TryHashData(ReadOnlySpan<byte> key, ReadOnlySpan<byte> source, Span<byte> destination, out int bytesWritten)
         {

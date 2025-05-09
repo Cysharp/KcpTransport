@@ -2,7 +2,7 @@
 
 namespace KcpTransport.Fallbacks
 {
-    internal static class StopwatchFallback
+    public static class StopwatchFallback
     {
         private static readonly double s_tickFrequency = (double)TimeSpan.TicksPerSecond / Stopwatch.Frequency;
 

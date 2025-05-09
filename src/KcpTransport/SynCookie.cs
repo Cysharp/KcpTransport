@@ -34,7 +34,7 @@ namespace KcpTransport
                 return false;
             }
 
-            var elapsed = Stopwatch.GetElapsedTime(timestamp);
+            var elapsed = StopwatchFallback.GetElapsedTime(timestamp);
             if (elapsed < timeout)
             {
                 return true;
@@ -55,7 +55,7 @@ namespace KcpTransport
 #endif
             MemoryMarshalFallback.Write(source.Slice(remoteAddress.Size), timestamp);
 
-            Span<byte> dest = stackalloc byte[HMACSHA256.HashSizeInBytes];
+            Span<byte> dest = stackalloc byte[32];
             HMACSHA256Fallback.TryHashData(hashKey, source, dest, out _);
 
             return MemoryMarshal.Read<uint>(dest);
