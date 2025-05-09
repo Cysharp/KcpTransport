@@ -1,8 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net8.0;net7.0;net6.0</TargetFrameworks>
-        <ImplicitUsings>enable</ImplicitUsings>
+        <TargetFrameworks>net8.0;net7.0;net6.0;net5.0</TargetFrameworks>
+        <ImplicitUsings>disable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
@@ -21,7 +21,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
+        <PackageReference Include="System.IO.Pipelines" Version="9.0.4" />
     </ItemGroup>
 
     <ItemGroup>

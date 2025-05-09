@@ -1,8 +1,10 @@
-﻿using KcpTransport;
+﻿using System;
+using KcpTransport;
 using KcpTransport.LowLevel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 using KcpTransport.Fallbacks;
 using static KcpTransport.LowLevel.KcpMethods;
 

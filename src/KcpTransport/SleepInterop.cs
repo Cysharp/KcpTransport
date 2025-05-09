@@ -2,9 +2,11 @@
 // needs for the high-resolution timer: https://github.com/Cysharp/LogicLooper/issues/11
 // https://github.com/dotnet/runtime/issues/67088
 
+using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
 using Windows.Win32;
 
 namespace KcpTransport

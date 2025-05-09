@@ -1,17 +1,26 @@
-﻿using KcpTransport.LowLevel;
+﻿using System;
+using System.Buffers;
+using KcpTransport.LowLevel;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 using KcpTransport.Fallbacks;
 
 namespace KcpTransport
 {
-    public abstract record class KcpOptions
+    public abstract
+#if NET6_0_OR_GREATER
+    record
+#endif
+        class KcpOptions
     {
         public bool EnableNoDelay { get; set; } = true;
         public int IntervalMilliseconds { get; set; } = 10; // ikcp_nodelay min is 10.
@@ -31,15 +40,31 @@ namespace KcpTransport
 
     public delegate ReadOnlySpan<byte> HashFunc();
 
-    public sealed record class KcpListenerOptions : KcpOptions
+    public sealed
+#if NET6_0_OR_GREATER
+    record
+#endif
+        class KcpListenerOptions : KcpOptions
     {
+#if NET6_0_OR_GREATER
         static readonly byte[] DefaultRandomHashKey = RandomNumberGenerator.GetBytes(32);
+#else
+        private static readonly byte[] DefaultRandomHashKey;
+
+        static KcpListenerOptions()
+        {
+            DefaultRandomHashKey = new byte[32];
+            RandomNumberGenerator.Fill(DefaultRandomHashKey);
+        }
+
+#endif
 
         public
 #if NET7_0_OR_GREATER
             required
 #endif
             IPEndPoint ListenEndPoint { get; set; }
+
         public TimeSpan UpdatePeriod { get; set; } = TimeSpan.FromMilliseconds(5);
         public int EventLoopCount { get; set; } = Math.Max(1, Environment.ProcessorCount / 2);
         public bool ConfigureAwait { get; set; } = false;
@@ -319,12 +344,21 @@ namespace KcpTransport
 #endif
                     clientAddress, uint conversationId, uint cookie, long timestamp)
             {
+#if NET6_0_OR_GREATER
                 Span<byte> data = stackalloc byte[20]; // type(4) + conv(4) + cookie(4) + timestamp(8)
+#else
+                byte[] array = ArrayPool<byte>.Shared.Rent(20);
+                Span<byte> data = array.AsSpan(0, 20);
+#endif
                 MemoryMarshalFallback.Write(data, (uint)PacketType.HandshakeInitialResponse);
                 MemoryMarshalFallback.Write(data.Slice(4), conversationId);
                 MemoryMarshalFallback.Write(data.Slice(8), cookie);
                 MemoryMarshalFallback.Write(data.Slice(12), timestamp);
+#if NET6_0_OR_GREATER
                 socket.SendTo(data, SocketFlags.None, clientAddress);
+#else
+                socket.SendTo(array, 0, 20, SocketFlags.None, clientAddress);
+#endif
             }
 
             static void SendHandshakeOkResponse(Socket socket,
@@ -335,9 +369,18 @@ namespace KcpTransport
 #endif
                     clientAddress)
             {
+#if NET6_0_OR_GREATER
                 Span<byte> data = stackalloc byte[4];
+#else
+                byte[] array = ArrayPool<byte>.Shared.Rent(4);
+                Span<byte> data = array.AsSpan(0, 4);
+#endif
                 MemoryMarshalFallback.Write(data, (uint)PacketType.HandshakeOkResponse);
+#if NET6_0_OR_GREATER
                 socket.SendTo(data, SocketFlags.None, clientAddress);
+#else
+                socket.SendTo(array, 0, 4, SocketFlags.None, clientAddress);
+#endif
             }
 
             static void SendHandshakeNgResponse(Socket socket,
@@ -348,9 +391,18 @@ namespace KcpTransport
 #endif
                     clientAddress)
             {
+#if NET6_0_OR_GREATER
                 Span<byte> data = stackalloc byte[4];
+#else
+                byte[] array = ArrayPool<byte>.Shared.Rent(4);
+                Span<byte> data = array.AsSpan(0, 4);
+#endif
                 MemoryMarshalFallback.Write(data, (uint)PacketType.HandshakeNgResponse);
+#if NET6_0_OR_GREATER
                 socket.SendTo(data, SocketFlags.None, clientAddress);
+#else
+                socket.SendTo(array, 0, 4, SocketFlags.None, clientAddress);
+#endif
             }
         }
 

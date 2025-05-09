@@ -1,5 +1,6 @@
 ﻿#pragma warning disable CS8500
 
+using System;
 using KcpTransport.LowLevel;
 using System.Buffers;
 using System.Diagnostics;
@@ -8,12 +9,18 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using KcpTransport.Fallbacks;
 using static KcpTransport.LowLevel.KcpMethods;
 
 namespace KcpTransport
 {
-    public sealed record class KcpClientConnectionOptions : KcpOptions
+    public sealed
+#if NET6_0_OR_GREATER
+    record
+#endif
+        class KcpClientConnectionOptions : KcpOptions
     {
         public
 #if NET7_0_OR_GREATER
