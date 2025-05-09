@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -9,12 +10,7 @@ namespace KcpTransport.Fallbacks
     public static class SocketExtensions
     {
 #if !NET6_0_OR_GREATER
-        public static Task<SocketReceiveFromResult> ReceiveFromAsync(
-            this Socket socket,
-            ArraySegment<byte> buffer,
-            SocketFlags socketFlags,
-            EndPoint remoteEndPoint,
-            CancellationToken cancellationToken)
+        public static ValueTask<SocketReceiveFromResult> ReceiveFromAsync(this Socket socket, ArraySegment<byte> buffer, SocketFlags socketFlags, EndPoint remoteEndPoint, CancellationToken cancellationToken)
         {
             var tcs = new TaskCompletionSource<SocketReceiveFromResult>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -27,7 +23,7 @@ namespace KcpTransport.Fallbacks
             {
                 Cleanup(args);
                 tcs.TrySetCanceled(cancellationToken);
-                return tcs.Task;
+                return new ValueTask<SocketReceiveFromResult>(tcs.Task);
             }
 
             var registration = cancellationToken.Register(() =>
@@ -41,11 +37,11 @@ namespace KcpTransport.Fallbacks
                 OnCompleted(socket, args);
             }
 
-            return tcs.Task.ContinueWith(task =>
+            return new ValueTask<SocketReceiveFromResult>(tcs.Task.ContinueWith(task =>
             {
                 registration.Dispose();
                 return task.GetAwaiter().GetResult();
-            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default));
 
             void Cleanup(SocketAsyncEventArgs eventArgs)
             {
@@ -63,6 +59,37 @@ namespace KcpTransport.Fallbacks
                 else
                 {
                     tcs.TrySetException(new SocketException((int)e.SocketError));
+                }
+            }
+        }
+#endif
+
+#if !NET5_0_OR_GREATER
+        public static ValueTask ConnectAsync(this Socket socket, EndPoint remoteEP, CancellationToken cancellationToken)
+        {
+            var tcs = new TaskCompletionSource<bool>();
+            cancellationToken.Register(() => tcs.SetCanceled());
+            try
+            {
+                socket.BeginConnect(remoteEP, AsyncCallback, null);
+            }
+            catch (Exception ex)
+            {
+                tcs.SetException(ex);
+            }
+
+            return new ValueTask(tcs.Task);
+
+            void AsyncCallback(IAsyncResult ar)
+            {
+                try
+                {
+                    socket.EndConnect(ar);
+                    tcs.SetResult(true);
+                }
+                catch (Exception ex)
+                {
+                    tcs.SetException(ex);
                 }
             }
         }

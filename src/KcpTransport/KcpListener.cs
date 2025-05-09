@@ -14,6 +14,8 @@ using System.Threading.Channels;
 using System.Threading.Tasks;
 using KcpTransport.Fallbacks;
 
+#pragma warning disable CS8618
+
 namespace KcpTransport
 {
     public abstract
@@ -116,7 +118,11 @@ namespace KcpTransport
             // https://stackoverflow.com/questions/7201862/an-existing-connection-was-forcibly-closed-by-the-remote-host/7478498
             // https://stackoverflow.com/questions/34242622/windows-udp-sockets-recvfrom-fails-with-error-10054
             // https://stackoverflow.com/questions/74327225/why-does-sending-via-a-udpclient-cause-subsequent-receiving-to-fail
+#if NET5_0_OR_GREATER
             if (OperatingSystem.IsWindows())
+#else
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+#endif
             {
                 const uint IOC_IN = 0x80000000U;
                 const uint IOC_VENDOR = 0x18000000U;
@@ -174,7 +180,11 @@ namespace KcpTransport
             var random = new Random();
             var cancellationToken = this.listenerCancellationTokenSource.Token;
 
+#if NET5_0_OR_GREATER
             var socketBuffer = GC.AllocateUninitializedArray<byte>(options.MaximumTransmissionUnit, pinned: true); // Create to pinned object heap
+#else
+            var socketBuffer = new byte[options.MaximumTransmissionUnit]; // Create to pinned object heap
+#endif
 
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -315,8 +325,15 @@ namespace KcpTransport
                                 {
                                     unsafe
                                     {
+#if NET5_0_OR_GREATER
                                         var socketBufferPointer = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(socketBuffer));
                                         if (!kcpConnection.InputReceivedKcpBuffer(socketBufferPointer, received)) continue;
+#else
+                                        fixed (byte* socketBufferPointer = &MemoryMarshal.GetReference(socketBuffer.AsSpan()))
+                                        {
+                                            if (!kcpConnection.InputReceivedKcpBuffer(socketBufferPointer, received)) continue;
+                                        }
+#endif
                                     }
 
 #if NET8_0_OR_GREATER

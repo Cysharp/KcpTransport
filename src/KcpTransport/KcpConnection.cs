@@ -1,4 +1,5 @@
 ﻿#pragma warning disable CS8500
+#pragma warning disable CS8618
 
 using System;
 using KcpTransport.LowLevel;
@@ -27,6 +28,7 @@ namespace KcpTransport
             required
 #endif
             EndPoint RemoteEndPoint { get; set; }
+
         public TimeSpan UpdatePeriod { get; set; } = TimeSpan.FromMilliseconds(5);
         public bool ConfigureAwait { get; set; } = false;
         public TimeSpan KeepAliveDelay { get; set; } = TimeSpan.FromSeconds(20);
@@ -178,7 +180,11 @@ namespace KcpTransport
 #endif
             var cancellationToken = this.connectionCancellationTokenSource.Token;
 
+#if NET5_0_OR_GREATER
             var socketBuffer = GC.AllocateUninitializedArray<byte>(options.MaximumTransmissionUnit, pinned: true); // Create to pinned object heap
+#else
+            var socketBuffer = new byte[options.MaximumTransmissionUnit];
+#endif
 
             while (true)
             {
@@ -219,8 +225,15 @@ namespace KcpTransport
 
                             unsafe
                             {
+#if NET5_0_OR_GREATER
                                 var socketBufferPointer = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetArrayDataReference(socketBuffer));
                                 if (!InputReceivedKcpBuffer(socketBufferPointer, received)) continue;
+#else
+                                fixed (byte* socketBufferPointer = &MemoryMarshal.GetReference(socketBuffer.AsSpan()))
+                                {
+                                    if (!InputReceivedKcpBuffer(socketBufferPointer, received)) continue;
+                                }
+#endif
                             }
 
                             await AwaitForLastFlushResult();
