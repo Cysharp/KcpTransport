@@ -2,8 +2,6 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using IINT32 = int;
-using IUINT32 = uint;
 
 namespace KcpTransport.LowLevel
 {
@@ -87,43 +85,43 @@ namespace KcpTransport.LowLevel
         public IQUEUEHEAD node;
 
         // in network data structure
-        public IUINT32 conv; // 4B
-        public IUINT32 cmd; // 1B
-        public IUINT32 frg; // 1B
-        public IUINT32 wnd; // 2B
-        public IUINT32 ts; // 4B
-        public IUINT32 sn; // 4B
-        public IUINT32 una; // 4B
-        public IUINT32 len; // 4B
+        public UInt32 conv; // 4B
+        public UInt32 cmd; // 1B
+        public UInt32 frg; // 1B
+        public UInt32 wnd; // 2B
+        public UInt32 ts; // 4B
+        public UInt32 sn; // 4B
+        public UInt32 una; // 4B
+        public UInt32 len; // 4B
 
-        public IUINT32 resendts;
-        public IUINT32 rto;
-        public IUINT32 fastack;
-        public IUINT32 xmit;
+        public UInt32 resendts;
+        public UInt32 rto;
+        public UInt32 fastack;
+        public UInt32 xmit;
         public fixed byte data[1]; // body, flexible array member
     };
 
     [StructLayout(LayoutKind.Sequential)]
     public unsafe struct IKCPCB
     {
-        public IUINT32 conv, mtu, mss, state;
-        public IUINT32 snd_una, snd_nxt, rcv_nxt;
-        public IUINT32 ts_recent, ts_lastack, ssthresh;
-        public IINT32 rx_rttval, rx_srtt, rx_rto, rx_minrto;
-        public IUINT32 snd_wnd, rcv_wnd, rmt_wnd, cwnd, probe;
-        public IUINT32 current, interval, ts_flush, xmit;
-        public IUINT32 nrcv_buf, nsnd_buf;
-        public IUINT32 nrcv_que, nsnd_que;
-        public IUINT32 nodelay, updated;
-        public IUINT32 ts_probe, probe_wait;
-        public IUINT32 dead_link, incr;
+        public UInt32 conv, mtu, mss, state;
+        public UInt32 snd_una, snd_nxt, rcv_nxt;
+        public UInt32 ts_recent, ts_lastack, ssthresh;
+        public Int32 rx_rttval, rx_srtt, rx_rto, rx_minrto;
+        public UInt32 snd_wnd, rcv_wnd, rmt_wnd, cwnd, probe;
+        public UInt32 current, interval, ts_flush, xmit;
+        public UInt32 nrcv_buf, nsnd_buf;
+        public UInt32 nrcv_que, nsnd_que;
+        public UInt32 nodelay, updated;
+        public UInt32 ts_probe, probe_wait;
+        public UInt32 dead_link, incr;
         public IQUEUEHEAD snd_queue;
         public IQUEUEHEAD rcv_queue;
         public IQUEUEHEAD snd_buf;
         public IQUEUEHEAD rcv_buf;
-        public IUINT32* acklist;
-        public IUINT32 ackcount;
-        public IUINT32 ackblock;
+        public UInt32* acklist;
+        public UInt32 ackcount;
+        public UInt32 ackblock;
         public void* user;
         public byte* buffer;
         public int fastresend;
@@ -137,17 +135,17 @@ namespace KcpTransport.LowLevel
 
     internal static class KcpConfigurations
     {
-        public const IUINT32 IKCP_LOG_OUTPUT = 1;
-        public const IUINT32 IKCP_LOG_INPUT = 2;
-        public const IUINT32 IKCP_LOG_SEND = 4;
-        public const IUINT32 IKCP_LOG_RECV = 8;
-        public const IUINT32 IKCP_LOG_IN_DATA = 16;
-        public const IUINT32 IKCP_LOG_IN_ACK = 32;
-        public const IUINT32 IKCP_LOG_IN_PROBE = 64;
-        public const IUINT32 IKCP_LOG_IN_WINS = 128;
-        public const IUINT32 IKCP_LOG_OUT_DATA = 256;
-        public const IUINT32 IKCP_LOG_OUT_ACK = 512;
-        public const IUINT32 IKCP_LOG_OUT_PROBE = 1024;
-        public const IUINT32 IKCP_LOG_OUT_WINS = 2048;
+        public const uint IKCP_LOG_OUTPUT = 1;
+        public const uint IKCP_LOG_INPUT = 2;
+        public const uint IKCP_LOG_SEND = 4;
+        public const uint IKCP_LOG_RECV = 8;
+        public const uint IKCP_LOG_IN_DATA = 16;
+        public const uint IKCP_LOG_IN_ACK = 32;
+        public const uint IKCP_LOG_IN_PROBE = 64;
+        public const uint IKCP_LOG_IN_WINS = 128;
+        public const uint IKCP_LOG_OUT_DATA = 256;
+        public const uint IKCP_LOG_OUT_ACK = 512;
+        public const uint IKCP_LOG_OUT_PROBE = 1024;
+        public const uint IKCP_LOG_OUT_WINS = 2048;
     }
 }

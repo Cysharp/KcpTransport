@@ -159,7 +159,12 @@ namespace KcpTransport
 
         async Task StartSocketEventLoopAsync(KcpClientConnectionOptions options)
         {
+#if NET8_0_OR_GREATER
             await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+#else
+            await Task.Yield();
+            await Task.CompletedTask.ConfigureAwait(false);
+#endif
             var cancellationToken = this.connectionCancellationTokenSource.Token;
 
             var socketBuffer = GC.AllocateUninitializedArray<byte>(options.MaximumTransmissionUnit, pinned: true); // Create to pinned object heap

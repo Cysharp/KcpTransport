@@ -4,12 +4,6 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using static KcpTransport.LowLevel.CMethods;
 using static KcpTransport.LowLevel.IQUEUEHEAD;
-using IINT32 = int;
-using ikcpcb = KcpTransport.LowLevel.IKCPCB;
-using IUINT16 = ushort;
-using IUINT32 = uint;
-using IUINT8 = byte;
-using size_t = nint;
 
 namespace KcpTransport.LowLevel
 {
@@ -19,28 +13,28 @@ namespace KcpTransport.LowLevel
         // KCP BASIC
         //=====================================================================
 
-        public const IUINT32 IKCP_RTO_NDL = 30; // no delay min rto
-        public const IUINT32 IKCP_RTO_MIN = 100; // normal min rto
-        public const IUINT32 IKCP_RTO_DEF = 200; // RTO default
-        public const IUINT32 IKCP_RTO_MAX = 60000;
-        public const IUINT32 IKCP_CMD_PUSH = 81; // cmd: push data
-        public const IUINT32 IKCP_CMD_ACK = 82; // cmd: ack
-        public const IUINT32 IKCP_CMD_WASK = 83; // cmd: window probe (ask)
-        public const IUINT32 IKCP_CMD_WINS = 84; // cmd: window size (tell)
-        public const IUINT32 IKCP_ASK_SEND = 1; // need to send IKCP_CMD_WASK
-        public const IUINT32 IKCP_ASK_TELL = 2; // need to send IKCP_CMD_WINS
-        public const IUINT32 IKCP_WND_SND = 32;
-        public const IUINT32 IKCP_WND_RCV = 128; // must >= max fragment size
-        public const IUINT32 IKCP_MTU_DEF = 1400; // default MTU(Maximum Transmission Unit)
-        public const IUINT32 IKCP_ACK_FAST = 3;
-        public const IUINT32 IKCP_INTERVAL = 100;
-        public const IUINT32 IKCP_OVERHEAD = 24;
-        public const IUINT32 IKCP_DEADLINK = 20;
-        public const IUINT32 IKCP_THRESH_INIT = 2;
-        public const IUINT32 IKCP_THRESH_MIN = 2;
-        public const IUINT32 IKCP_PROBE_INIT = 7000; // 7 secs to probe window size
-        public const IUINT32 IKCP_PROBE_LIMIT = 120000; // up to 120 secs to probe window
-        public const IUINT32 IKCP_FASTACK_LIMIT = 5; // max times to trigger fastack
+        public const uint IKCP_RTO_NDL = 30; // no delay min rto
+        public const uint IKCP_RTO_MIN = 100; // normal min rto
+        public const uint IKCP_RTO_DEF = 200; // RTO default
+        public const uint IKCP_RTO_MAX = 60000;
+        public const uint IKCP_CMD_PUSH = 81; // cmd: push data
+        public const uint IKCP_CMD_ACK = 82; // cmd: ack
+        public const uint IKCP_CMD_WASK = 83; // cmd: window probe (ask)
+        public const uint IKCP_CMD_WINS = 84; // cmd: window size (tell)
+        public const uint IKCP_ASK_SEND = 1; // need to send IKCP_CMD_WASK
+        public const uint IKCP_ASK_TELL = 2; // need to send IKCP_CMD_WINS
+        public const uint IKCP_WND_SND = 32;
+        public const uint IKCP_WND_RCV = 128; // must >= max fragment size
+        public const uint IKCP_MTU_DEF = 1400; // default MTU(Maximum Transmission Unit)
+        public const uint IKCP_ACK_FAST = 3;
+        public const uint IKCP_INTERVAL = 100;
+        public const uint IKCP_OVERHEAD = 24;
+        public const uint IKCP_DEADLINK = 20;
+        public const uint IKCP_THRESH_INIT = 2;
+        public const uint IKCP_THRESH_MIN = 2;
+        public const uint IKCP_PROBE_INIT = 7000; // 7 secs to probe window size
+        public const uint IKCP_PROBE_LIMIT = 120000; // up to 120 secs to probe window
+        public const uint IKCP_FASTACK_LIMIT = 5; // max times to trigger fastack
 
 
         //---------------------------------------------------------------------
@@ -94,7 +88,7 @@ namespace KcpTransport.LowLevel
 
         /* encode 32 bits unsigned int (lsb) */
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static byte* ikcp_encode32u(byte* p, IUINT32 l)
+        static byte* ikcp_encode32u(byte* p, uint l)
         {
 #if IWORDS_BIG_ENDIAN || IWORDS_MUST_ALIGN
 	*(byte*)(p + 0) = (byte)((l >>  0) & 0xff);
@@ -110,7 +104,7 @@ namespace KcpTransport.LowLevel
 
         /* decode 32 bits unsigned int (lsb) */
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static byte* ikcp_decode32u(byte* p, IUINT32* l)
+        static byte* ikcp_decode32u(byte* p, uint* l)
         {
 #if IWORDS_BIG_ENDIAN || IWORDS_MUST_ALIGN
 	*l = *(byte*)(p + 3);
@@ -125,27 +119,27 @@ namespace KcpTransport.LowLevel
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static IUINT32 _imin_(IUINT32 a, IUINT32 b)
+        static uint _imin_(uint a, uint b)
         {
             return a <= b ? a : b;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static IUINT32 _imax_(IUINT32 a, IUINT32 b)
+        static uint _imax_(uint a, uint b)
         {
             return a >= b ? a : b;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static IUINT32 _ibound_(IUINT32 lower, IUINT32 middle, IUINT32 upper)
+        static uint _ibound_(uint lower, uint middle, uint upper)
         {
             return _imin_(_imax_(lower, middle), upper);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        static long _itimediff(IUINT32 later, IUINT32 earlier)
+        static long _itimediff(uint later, uint earlier)
         {
-            return (IINT32)(later - earlier);
+            return (int)(later - earlier);
         }
 
         //---------------------------------------------------------------------
@@ -156,7 +150,7 @@ namespace KcpTransport.LowLevel
         //static void (* ikcp_free_hook) (void*) = null;
 
         // internal malloc
-        static void* ikcp_malloc(size_t size)
+        static void* ikcp_malloc(nuint size)
         {
             //if (ikcp_malloc_hook)
             //    return ikcp_malloc_hook(size);
@@ -185,13 +179,13 @@ namespace KcpTransport.LowLevel
 
         // allocate a new kcp segment
 
-        static IKCPSEG* ikcp_segment_new(ikcpcb* kcp, int size)
+        static IKCPSEG* ikcp_segment_new(IKCPCB* kcp, int size)
         {
-            return (IKCPSEG*)ikcp_malloc(sizeof(IKCPSEG) + size);
+            return (IKCPSEG*)ikcp_malloc((nuint)(sizeof(IKCPSEG) + size));
         }
 
         // delete a segment
-        static void ikcp_segment_delete(ikcpcb* kcp, IKCPSEG* seg)
+        static void ikcp_segment_delete(IKCPCB* kcp, IKCPSEG* seg)
         {
             ikcp_free(seg);
         }
@@ -209,28 +203,28 @@ namespace KcpTransport.LowLevel
         //}
 
         [Conditional("DEBUG")]
-        static void ikcp_log(ikcpcb* kcp, string msg)
+        static void ikcp_log(IKCPCB* kcp, string msg)
         {
             if (kcp->writelog == null) return;
             kcp->writelog(msg, kcp);
         }
 
         [Conditional("DEBUG")]
-        static void ikcp_log<T1>(ikcpcb* kcp, string format, T1 arg1)
+        static void ikcp_log<T1>(IKCPCB* kcp, string format, T1 arg1)
         {
             if (kcp->writelog == null) return;
             kcp->writelog(string.Format(format, arg1), kcp);
         }
 
         [Conditional("DEBUG")]
-        static void ikcp_log<T1, T2>(ikcpcb* kcp, string format, T1 arg1, T2 arg2)
+        static void ikcp_log<T1, T2>(IKCPCB* kcp, string format, T1 arg1, T2 arg2)
         {
             if (kcp->writelog == null) return;
             kcp->writelog(string.Format(format, arg1, arg2), kcp);
         }
 
         [Conditional("DEBUG")]
-        static void ikcp_log<T1, T2, T3>(ikcpcb* kcp, string format, T1 arg1, T2 arg2, T3 arg3)
+        static void ikcp_log<T1, T2, T3>(IKCPCB* kcp, string format, T1 arg1, T2 arg2, T3 arg3)
         {
             if (kcp->writelog == null) return;
             kcp->writelog(string.Format(format, arg1, arg2, arg3), kcp);
@@ -244,7 +238,7 @@ namespace KcpTransport.LowLevel
         //}
 
         // output segment
-        static int ikcp_output(ikcpcb* kcp, void* data, int size)
+        static int ikcp_output(IKCPCB* kcp, void* data, int size)
         {
             assert(kcp);
             // assert(kcp->output);
@@ -275,9 +269,9 @@ namespace KcpTransport.LowLevel
         //---------------------------------------------------------------------
         // create a new kcpcb
         //---------------------------------------------------------------------
-        public static ikcpcb* ikcp_create(IUINT32 conv, void* user)
+        public static IKCPCB* ikcp_create(uint conv, void* user)
         {
-            ikcpcb* kcp = (ikcpcb*)ikcp_malloc(sizeof(ikcpcb));
+            IKCPCB* kcp = (IKCPCB*)ikcp_malloc((nuint)sizeof(IKCPCB));
 
             if (kcp == null) return null;
             kcp->conv = conv;
@@ -299,7 +293,7 @@ namespace KcpTransport.LowLevel
             kcp->mss = kcp->mtu - IKCP_OVERHEAD;
             kcp->stream = 0;
 
-            kcp->buffer = (byte*)ikcp_malloc((size_t)((kcp->mtu + IKCP_OVERHEAD) * 3));
+            kcp->buffer = (byte*)ikcp_malloc((nuint)((kcp->mtu + IKCP_OVERHEAD) * 3));
             if (kcp->buffer == null)
             {
                 ikcp_free(kcp);
@@ -344,7 +338,7 @@ namespace KcpTransport.LowLevel
         //---------------------------------------------------------------------
         // release a new kcpcb
         //---------------------------------------------------------------------
-        public static void ikcp_release(ikcpcb* kcp)
+        public static void ikcp_release(IKCPCB* kcp)
         {
             assert(kcp);
             if (kcp != null)
@@ -403,7 +397,7 @@ namespace KcpTransport.LowLevel
         //---------------------------------------------------------------------
         // set output callback, which will be invoked by kcp
         //---------------------------------------------------------------------
-        public static void ikcp_setoutput(ikcpcb* kcp, delegate* managed<byte*, int, IKCPCB*, void*, int> output)
+        public static void ikcp_setoutput(IKCPCB* kcp, delegate* managed<byte*, int, IKCPCB*, void*, int> output)
         {
             kcp->output = output;
         }
@@ -411,7 +405,7 @@ namespace KcpTransport.LowLevel
         //---------------------------------------------------------------------
         // user/upper level recv: returns size, returns below zero for EAGAIN
         //---------------------------------------------------------------------
-        public static int ikcp_recv(ikcpcb* kcp, byte* buffer, int len)
+        public static int ikcp_recv(IKCPCB* kcp, byte* buffer, int len)
         {
             // struct IQUEUEHEAD *p;
             int ispeek = len < 0 ? 1 : 0;
@@ -443,7 +437,7 @@ namespace KcpTransport.LowLevel
 
                 if (buffer != null)
                 {
-                    memcpy(buffer, seg->data, (int)seg->len);
+                    memcpy(buffer, seg->data, (nuint)seg->len);
                     buffer += seg->len;
                 }
 
@@ -498,7 +492,7 @@ namespace KcpTransport.LowLevel
         //---------------------------------------------------------------------
         // peek data size
         //---------------------------------------------------------------------
-        public static int ikcp_peeksize(ikcpcb* kcp)
+        public static int ikcp_peeksize(IKCPCB* kcp)
         {
             IQUEUEHEAD* p;
             IKCPSEG* seg;
@@ -526,7 +520,7 @@ namespace KcpTransport.LowLevel
         //---------------------------------------------------------------------
         // user/upper level send, returns below zero for error
         //---------------------------------------------------------------------
-        public static int ikcp_send(ikcpcb* kcp, byte* buffer, int len)
+        public static int ikcp_send(IKCPCB* kcp, byte* buffer, int len)
         {
             IKCPSEG* seg;
             int count, i;
@@ -553,10 +547,10 @@ namespace KcpTransport.LowLevel
                         }
 
                         iqueue_add_tail(&seg->node, &kcp->snd_queue);
-                        memcpy(seg->data, old->data, (int)old->len);
+                        memcpy(seg->data, old->data, (nuint)old->len);
                         if (buffer != null)
                         {
-                            memcpy(seg->data + old->len, buffer, extend);
+                            memcpy(seg->data + old->len, buffer, (nuint)extend);
                             buffer += extend;
                         }
 
@@ -602,7 +596,7 @@ namespace KcpTransport.LowLevel
 
                 if (buffer != null && len > 0)
                 {
-                    memcpy(seg->data, buffer, size);
+                    memcpy(seg->data, buffer, (nuint)size);
                 }
 
                 seg->len = (uint)size;
@@ -626,9 +620,9 @@ namespace KcpTransport.LowLevel
         //---------------------------------------------------------------------
         // parse ack
         //---------------------------------------------------------------------
-        static void ikcp_update_ack(ikcpcb* kcp, IINT32 rtt)
+        static void ikcp_update_ack(IKCPCB* kcp, int rtt)
         {
-            IINT32 rto = 0;
+            int rto = 0;
             if (kcp->rx_srtt == 0)
             {
                 kcp->rx_srtt = rtt;
@@ -647,7 +641,7 @@ namespace KcpTransport.LowLevel
             kcp->rx_rto = (int)_ibound_((uint)kcp->rx_minrto, (uint)rto, IKCP_RTO_MAX);
         }
 
-        static void ikcp_shrink_buf(ikcpcb* kcp)
+        static void ikcp_shrink_buf(IKCPCB* kcp)
         {
             IQUEUEHEAD* p = kcp->snd_buf.next;
             if (p != &kcp->snd_buf)
@@ -661,7 +655,7 @@ namespace KcpTransport.LowLevel
             }
         }
 
-        static void ikcp_parse_ack(ikcpcb* kcp, IUINT32 sn)
+        static void ikcp_parse_ack(IKCPCB* kcp, uint sn)
         {
             IQUEUEHEAD* p, next;
             if (_itimediff(sn, kcp->snd_una) < 0 || _itimediff(sn, kcp->snd_nxt) >= 0)
@@ -686,7 +680,7 @@ namespace KcpTransport.LowLevel
             }
         }
 
-        static void ikcp_parse_una(ikcpcb* kcp, IUINT32 una)
+        static void ikcp_parse_una(IKCPCB* kcp, uint una)
         {
             IQUEUEHEAD* p, next;
             for (p = kcp->snd_buf.next; p != &kcp->snd_buf; p = next)
@@ -706,7 +700,7 @@ namespace KcpTransport.LowLevel
             }
         }
 
-        static void ikcp_parse_fastack(ikcpcb* kcp, IUINT32 sn, IUINT32 ts)
+        static void ikcp_parse_fastack(IKCPCB* kcp, uint sn, uint ts)
         {
             IQUEUEHEAD* p, next;
             if (_itimediff(sn, kcp->snd_una) < 0 || _itimediff(sn, kcp->snd_nxt) >= 0)
@@ -736,18 +730,18 @@ namespace KcpTransport.LowLevel
         //---------------------------------------------------------------------
         // ack append
         //---------------------------------------------------------------------
-        static void ikcp_ack_push(ikcpcb* kcp, IUINT32 sn, IUINT32 ts)
+        static void ikcp_ack_push(IKCPCB* kcp, uint sn, uint ts)
         {
-            IUINT32 newsize = kcp->ackcount + 1;
-            IUINT32* ptr;
+            uint newsize = kcp->ackcount + 1;
+            uint* ptr;
 
             if (newsize > kcp->ackblock)
             {
-                IUINT32* acklist;
-                IUINT32 newblock;
+                uint* acklist;
+                uint newblock;
 
                 for (newblock = 8; newblock < newsize; newblock <<= 1) ;
-                acklist = (IUINT32*)ikcp_malloc((size_t)(newblock * sizeof(IUINT32) * 2));
+                acklist = (uint*)ikcp_malloc((nuint)(newblock * sizeof(uint) * 2));
 
                 if (acklist == null)
                 {
@@ -757,7 +751,7 @@ namespace KcpTransport.LowLevel
 
                 if (kcp->acklist != null)
                 {
-                    IUINT32 x;
+                    uint x;
                     for (x = 0; x < kcp->ackcount; x++)
                     {
                         acklist[x * 2 + 0] = kcp->acklist[x * 2 + 0];
@@ -777,7 +771,7 @@ namespace KcpTransport.LowLevel
             kcp->ackcount++;
         }
 
-        static void ikcp_ack_get(ikcpcb* kcp, int p, IUINT32* sn, IUINT32* ts)
+        static void ikcp_ack_get(IKCPCB* kcp, int p, uint* sn, uint* ts)
         {
             if (sn != null) sn[0] = kcp->acklist[p * 2 + 0];
             if (ts != null) ts[0] = kcp->acklist[p * 2 + 1];
@@ -787,10 +781,10 @@ namespace KcpTransport.LowLevel
         //---------------------------------------------------------------------
         // parse data
         //---------------------------------------------------------------------
-        static void ikcp_parse_data(ikcpcb* kcp, IKCPSEG* newseg)
+        static void ikcp_parse_data(IKCPCB* kcp, IKCPSEG* newseg)
         {
             IQUEUEHEAD* p, prev;
-            IUINT32 sn = newseg->sn;
+            uint sn = newseg->sn;
             int repeat = 0;
 
             if (_itimediff(sn, kcp->rcv_nxt + kcp->rcv_wnd) >= 0 ||
@@ -865,10 +859,10 @@ namespace KcpTransport.LowLevel
         //---------------------------------------------------------------------
         // input data
         //---------------------------------------------------------------------
-        public static int ikcp_input(ikcpcb* kcp, byte* data, long size)
+        public static int ikcp_input(IKCPCB* kcp, byte* data, long size)
         {
-            IUINT32 prev_una = kcp->snd_una;
-            IUINT32 maxack = 0, latest_ts = 0;
+            uint prev_una = kcp->snd_una;
+            uint maxack = 0, latest_ts = 0;
             int flag = 0;
 
             //if (ikcp_canlog(kcp, IKCP_LOG_INPUT))
@@ -881,9 +875,9 @@ namespace KcpTransport.LowLevel
 
             while (true)
             {
-                IUINT32 ts, sn, len, una, conv;
-                IUINT16 wnd;
-                IUINT8 cmd, frg;
+                uint ts, sn, len, una, conv;
+                ushort wnd;
+                byte cmd, frg;
                 IKCPSEG* seg;
 
                 if (size < (int)IKCP_OVERHEAD) break;
@@ -945,7 +939,7 @@ namespace KcpTransport.LowLevel
                     //           if (ikcp_canlog(kcp, IKCP_LOG_IN_ACK))
                     //           {
                     //               ikcp_log(kcp, IKCP_LOG_IN_ACK,
-                    //                   "input ack: sn=%lu rtt=%ld rto=%ld", (unsigned long)sn, 
+                    //                   "input ack: sn=%lu rtt=%ld rto=%ld", (unsigned long)sn,
                     //(long)_itimediff(kcp->current, ts),
                     //(long)kcp->rx_rto);
                     //           }
@@ -977,7 +971,7 @@ namespace KcpTransport.LowLevel
 
                             if (len > 0)
                             {
-                                memcpy(seg->data, data, (int)len);
+                                memcpy(seg->data, data, (nuint)len);
                             }
 
                             ikcp_parse_data(kcp, seg);
@@ -1023,7 +1017,7 @@ namespace KcpTransport.LowLevel
             {
                 if (kcp->cwnd < kcp->rmt_wnd)
                 {
-                    IUINT32 mss = kcp->mss;
+                    uint mss = kcp->mss;
                     if (kcp->cwnd < kcp->ssthresh)
                     {
                         kcp->cwnd++;
@@ -1061,9 +1055,9 @@ namespace KcpTransport.LowLevel
         static byte* ikcp_encode_seg(byte* ptr, IKCPSEG* seg)
         {
             ptr = ikcp_encode32u(ptr, seg->conv);
-            ptr = ikcp_encode8u(ptr, (IUINT8)seg->cmd);
-            ptr = ikcp_encode8u(ptr, (IUINT8)seg->frg);
-            ptr = ikcp_encode16u(ptr, (IUINT16)seg->wnd);
+            ptr = ikcp_encode8u(ptr, (byte)seg->cmd);
+            ptr = ikcp_encode8u(ptr, (byte)seg->frg);
+            ptr = ikcp_encode16u(ptr, (ushort)seg->wnd);
             ptr = ikcp_encode32u(ptr, seg->ts);
             ptr = ikcp_encode32u(ptr, seg->sn);
             ptr = ikcp_encode32u(ptr, seg->una);
@@ -1071,7 +1065,7 @@ namespace KcpTransport.LowLevel
             return ptr;
         }
 
-        static int ikcp_wnd_unused(ikcpcb* kcp)
+        static int ikcp_wnd_unused(IKCPCB* kcp)
         {
             if (kcp->nrcv_que < kcp->rcv_wnd)
             {
@@ -1085,21 +1079,21 @@ namespace KcpTransport.LowLevel
         //---------------------------------------------------------------------
         // ikcp_flush
         //---------------------------------------------------------------------
-        public static void ikcp_flush(ikcpcb* kcp)
+        public static void ikcp_flush(IKCPCB* kcp)
         {
-            IUINT32 current = kcp->current;
+            uint current = kcp->current;
             byte* buffer = kcp->buffer;
             byte* ptr = buffer;
             int count, size, i;
-            IUINT32 resent, cwnd;
-            IUINT32 rtomin;
+            uint resent, cwnd;
+            uint rtomin;
 
             IQUEUEHEAD* p;
             int change = 0;
             int lost = 0;
             IKCPSEG seg;
 
-            // 'ikcp_update' haven't been called. 
+            // 'ikcp_update' haven't been called.
             if (kcp->updated == 0) return;
 
             seg.conv = kcp->conv;
@@ -1216,7 +1210,7 @@ namespace KcpTransport.LowLevel
             }
 
             // calculate resent
-            resent = kcp->fastresend > 0 ? (IUINT32)kcp->fastresend : 0xffffffff;
+            resent = kcp->fastresend > 0 ? (uint)kcp->fastresend : 0xffffffff;
             rtomin = (uint)(kcp->nodelay == 0 ? kcp->rx_rto >> 3 : 0);
 
             // flush data segments
@@ -1238,11 +1232,11 @@ namespace KcpTransport.LowLevel
                     kcp->xmit++;
                     if (kcp->nodelay == 0)
                     {
-                        segment->rto += _imax_(segment->rto, (IUINT32)kcp->rx_rto);
+                        segment->rto += _imax_(segment->rto, (uint)kcp->rx_rto);
                     }
                     else
                     {
-                        IINT32 step = kcp->nodelay < 2 ? (IINT32)segment->rto : kcp->rx_rto;
+                        int step = kcp->nodelay < 2 ? (int)segment->rto : kcp->rx_rto;
                         segment->rto += (uint)(step / 2);
                     }
 
@@ -1281,13 +1275,13 @@ namespace KcpTransport.LowLevel
 
                     if (segment->len > 0)
                     {
-                        memcpy(ptr, segment->data, (int)segment->len);
+                        memcpy(ptr, segment->data, (nuint)segment->len);
                         ptr += segment->len;
                     }
 
                     if (segment->xmit >= kcp->dead_link)
                     {
-                        kcp->state = unchecked((IUINT32)(-1));
+                        kcp->state = unchecked((uint)(-1));
                     }
                 }
             }
@@ -1302,7 +1296,7 @@ namespace KcpTransport.LowLevel
             // update ssthresh
             if (change != 0)
             {
-                IUINT32 inflight = kcp->snd_nxt - kcp->snd_una;
+                uint inflight = kcp->snd_nxt - kcp->snd_una;
                 kcp->ssthresh = inflight / 2;
                 if (kcp->ssthresh < IKCP_THRESH_MIN)
                     kcp->ssthresh = IKCP_THRESH_MIN;
@@ -1328,13 +1322,13 @@ namespace KcpTransport.LowLevel
 
 
         //---------------------------------------------------------------------
-        // update state (call it repeatedly, every 10ms-100ms), or you can ask 
+        // update state (call it repeatedly, every 10ms-100ms), or you can ask
         // ikcp_check when to call it again (without ikcp_input/_send calling).
-        // 'current' - current timestamp in millisec. 
+        // 'current' - current timestamp in millisec.
         //---------------------------------------------------------------------
-        public static void ikcp_update(ikcpcb* kcp, IUINT32 current)
+        public static void ikcp_update(IKCPCB* kcp, uint current)
         {
-            IINT32 slap;
+            int slap;
 
             kcp->current = current;
 
@@ -1367,19 +1361,19 @@ namespace KcpTransport.LowLevel
 
         //---------------------------------------------------------------------
         // Determine when should you invoke ikcp_update:
-        // returns when you should invoke ikcp_update in millisec, if there 
+        // returns when you should invoke ikcp_update in millisec, if there
         // is no ikcp_input/_send calling. you can call ikcp_update in that
         // time, instead of call update repeatly.
-        // Important to reduce unnacessary ikcp_update invoking. use it to 
-        // schedule ikcp_update (eg. implementing an epoll-like mechanism, 
+        // Important to reduce unnacessary ikcp_update invoking. use it to
+        // schedule ikcp_update (eg. implementing an epoll-like mechanism,
         // or optimize ikcp_update when handling massive kcp connections)
         //---------------------------------------------------------------------
-        public static IUINT32 ikcp_check(ikcpcb* kcp, IUINT32 current)
+        public static uint ikcp_check(IKCPCB* kcp, uint current)
         {
-            IUINT32 ts_flush = kcp->ts_flush;
-            IINT32 tm_flush = 0x7fffffff;
-            IINT32 tm_packet = 0x7fffffff;
-            IUINT32 minimal = 0;
+            uint ts_flush = kcp->ts_flush;
+            int tm_flush = 0x7fffffff;
+            int tm_packet = 0x7fffffff;
+            uint minimal = 0;
 
             IQUEUEHEAD* p;
 
@@ -1404,7 +1398,7 @@ namespace KcpTransport.LowLevel
             for (p = kcp->snd_buf.next; p != &kcp->snd_buf; p = p->next)
             {
                 IKCPSEG* seg = iqueue_entry(p);
-                IINT32 diff = (int)_itimediff(seg->resendts, current);
+                int diff = (int)_itimediff(seg->resendts, current);
                 if (diff <= 0)
                 {
                     return current;
@@ -1413,18 +1407,18 @@ namespace KcpTransport.LowLevel
                 if (diff < tm_packet) tm_packet = diff;
             }
 
-            minimal = (IUINT32)(tm_packet < tm_flush ? tm_packet : tm_flush);
+            minimal = (uint)(tm_packet < tm_flush ? tm_packet : tm_flush);
             if (minimal >= kcp->interval) minimal = kcp->interval;
 
             return current + minimal;
         }
 
-        public static int ikcp_setmtu(ikcpcb* kcp, int mtu)
+        public static int ikcp_setmtu(IKCPCB* kcp, int mtu)
         {
             byte* buffer;
             if (mtu < 50 || mtu < (int)IKCP_OVERHEAD)
                 return -1;
-            buffer = (byte*)ikcp_malloc((size_t)((mtu + IKCP_OVERHEAD) * 3));
+            buffer = (byte*)ikcp_malloc((nuint)((mtu + IKCP_OVERHEAD) * 3));
             if (buffer == null)
                 return -2;
             kcp->mtu = (uint)mtu;
@@ -1434,7 +1428,7 @@ namespace KcpTransport.LowLevel
             return 0;
         }
 
-        static int ikcp_interval(ikcpcb* kcp, int interval)
+        static int ikcp_interval(IKCPCB* kcp, int interval)
         {
             if (interval > 5000) interval = 5000;
             else if (interval < 10) interval = 10;
@@ -1442,7 +1436,7 @@ namespace KcpTransport.LowLevel
             return 0;
         }
 
-        public static int ikcp_nodelay(ikcpcb* kcp, int nodelay, int interval, int resend, int nc)
+        public static int ikcp_nodelay(IKCPCB* kcp, int nodelay, int interval, int resend, int nc)
         {
             if (nodelay >= 0)
             {
@@ -1478,7 +1472,7 @@ namespace KcpTransport.LowLevel
         }
 
 
-        public static int ikcp_wndsize(ikcpcb* kcp, int sndwnd, int rcvwnd)
+        public static int ikcp_wndsize(IKCPCB* kcp, int sndwnd, int rcvwnd)
         {
             if (kcp != null)
             {
@@ -1497,16 +1491,16 @@ namespace KcpTransport.LowLevel
             return 0;
         }
 
-        public static int ikcp_waitsnd(ikcpcb* kcp)
+        public static int ikcp_waitsnd(IKCPCB* kcp)
         {
             return (int)(kcp->nsnd_buf + kcp->nsnd_que);
         }
 
 
         // read conv
-        public static IUINT32 ikcp_getconv(void* ptr)
+        public static uint ikcp_getconv(void* ptr)
         {
-            IUINT32 conv;
+            uint conv;
             ikcp_decode32u((byte*)ptr, &conv);
             return conv;
         }

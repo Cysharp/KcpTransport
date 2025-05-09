@@ -92,7 +92,7 @@ namespace KcpTransport
                 const uint IOC_IN = 0x80000000U;
                 const uint IOC_VENDOR = 0x18000000U;
                 const uint SIO_UDP_CONNRESET = IOC_IN | IOC_VENDOR | 12;
-                socket.IOControl(unchecked((int)SIO_UDP_CONNRESET), [0x00], null);
+                socket.IOControl(unchecked((int)SIO_UDP_CONNRESET), new byte[1] { 0x00 }, null);
             }
 
             options.ConfigureSocket?.Invoke(socket, options, ListenerSocketType.Receive);
@@ -131,7 +131,11 @@ namespace KcpTransport
         {
             // await Task.CompletedTask.ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
 
+#if NET8_0_OR_GREATER
             var receivedAddress = new SocketAddress(options.ListenEndPoint.AddressFamily);
+#else
+            EndPoint receivedAddress = new IPEndPoint(options.ListenEndPoint.AddressFamily == AddressFamily.InterNetworkV6 ? IPAddress.IPv6Any : IPAddress.Any, 0);
+#endif
             var random = new Random();
             var cancellationToken = this.listenerCancellationTokenSource.Token;
 
@@ -142,7 +146,13 @@ namespace KcpTransport
                 try
                 {
                     // Socket is datagram so received data contains full block
+#if NET8_0_OR_GREATER
                     var received = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, receivedAddress, cancellationToken);
+#else
+                    var receivedResult = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, receivedAddress, cancellationToken);
+                    var received = receivedResult.ReceivedBytes;
+                    receivedAddress = receivedResult.RemoteEndPoint;
+#endif
 
                     // first 4 byte is conversationId or extra packet type
                     var conversationId = MemoryMarshal.Read<uint>(socketBuffer.AsSpan(0, received));
@@ -184,7 +194,11 @@ namespace KcpTransport
                                 }
 
                                 // create new connection
+#if NET8_0_OR_GREATER
                                 var kcpConnection = new KcpConnection(conversationId, options, receivedAddress);
+#else
+                                var kcpConnection = new KcpConnection(conversationId, options, receivedAddress.Serialize());
+#endif
                                 connections[conversationId] = kcpConnection;
                                 acceptQueue.Writer.TryWrite(kcpConnection);
                                 SendHandshakeOkResponse(socket, receivedAddress);
@@ -270,7 +284,11 @@ namespace KcpTransport
                                         if (!kcpConnection.InputReceivedKcpBuffer(socketBufferPointer, received)) continue;
                                     }
 
+#if NET8_0_OR_GREATER
                                     kcpConnection.ConsumeKcpFragments(receivedAddress, cancellationToken);
+#else
+                                    kcpConnection.ConsumeKcpFragments(receivedAddress.Serialize(), cancellationToken);
+#endif
                                 }
                             }
                             break;
@@ -283,7 +301,13 @@ namespace KcpTransport
                 }
             }
 
-            static void SendHandshakeInitialResponse(Socket socket, SocketAddress clientAddress, uint conversationId, uint cookie, long timestamp)
+            static void SendHandshakeInitialResponse(Socket socket,
+#if NET8_0_OR_GREATER
+                SocketAddress
+#else
+                EndPoint
+#endif
+                    clientAddress, uint conversationId, uint cookie, long timestamp)
             {
                 Span<byte> data = stackalloc byte[20]; // type(4) + conv(4) + cookie(4) + timestamp(8)
                 MemoryMarshalFallback.Write(data, (uint)PacketType.HandshakeInitialResponse);
@@ -293,14 +317,26 @@ namespace KcpTransport
                 socket.SendTo(data, SocketFlags.None, clientAddress);
             }
 
-            static void SendHandshakeOkResponse(Socket socket, SocketAddress clientAddress)
+            static void SendHandshakeOkResponse(Socket socket,
+#if NET8_0_OR_GREATER
+                SocketAddress
+#else
+                EndPoint
+#endif
+                    clientAddress)
             {
                 Span<byte> data = stackalloc byte[4];
                 MemoryMarshalFallback.Write(data, (uint)PacketType.HandshakeOkResponse);
                 socket.SendTo(data, SocketFlags.None, clientAddress);
             }
 
-            static void SendHandshakeNgResponse(Socket socket, SocketAddress clientAddress)
+            static void SendHandshakeNgResponse(Socket socket,
+#if NET8_0_OR_GREATER
+                SocketAddress
+#else
+                EndPoint
+#endif
+                    clientAddress)
             {
                 Span<byte> data = stackalloc byte[4];
                 MemoryMarshalFallback.Write(data, (uint)PacketType.HandshakeNgResponse);
