@@ -9,42 +9,43 @@ using size_t = nint;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 
-namespace KcpTransport.LowLevel;
-
-internal static unsafe class CMethods
+namespace KcpTransport.LowLevel
 {
-    public static void memcpy(void* dest, void* src, int n)
+    internal static unsafe class CMethods
     {
-        Buffer.MemoryCopy(src, dest, n, n);
-    }
+        public static void memcpy(void* dest, void* src, int n)
+        {
+            Buffer.MemoryCopy(src, dest, n, n);
+        }
 
-    public static void* malloc(size_t size)
-    {
-        return NativeMemory.AllocZeroed((nuint)size);
-    }
+        public static void* malloc(size_t size)
+        {
+            return NativeMemory.AllocZeroed((nuint)size);
+        }
 
-    public static void free(void* ptr)
-    {
-        NativeMemory.Free(ptr);
-    }
+        public static void free(void* ptr)
+        {
+            NativeMemory.Free(ptr);
+        }
 
-    [Conditional("DEBUG")]
-    public static void assert<T>(T _)
-    {
-    }
+        [Conditional("DEBUG")]
+        public static void assert<T>(T _)
+        {
+        }
 
-    [Conditional("DEBUG")]
-    public static void assert(IKCPCB* _)
-    {
-    }
+        [Conditional("DEBUG")]
+        public static void assert(IKCPCB* _)
+        {
+        }
 
-    [Conditional("DEBUG")]
-    public static void assert(IKCPSEG* _)
-    {
-    }
+        [Conditional("DEBUG")]
+        public static void assert(IKCPSEG* _)
+        {
+        }
 
-    public static void abort()
-    {
-        Environment.Exit(0);
+        public static void abort()
+        {
+            Environment.Exit(0);
+        }
     }
 }
