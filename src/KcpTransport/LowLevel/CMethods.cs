@@ -1,50 +1,55 @@
 ﻿#pragma warning disable CS8500
 #pragma warning disable CS8981
 
-using IUINT32 = uint;
-using IUINT16 = ushort;
-using IUINT8 = byte;
-using IINT32 = int;
-using size_t = nint;
+using System;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
-namespace KcpTransport.LowLevel;
-
-internal static unsafe class CMethods
+namespace KcpTransport.LowLevel
 {
-    public static void memcpy(void* dest, void* src, int n)
+    internal static unsafe class CMethods
     {
-        Buffer.MemoryCopy(src, dest, n, n);
-    }
+        public static void* malloc(nuint size)
+        {
+#if NET6_0_OR_GREATER
+            return NativeMemory.Alloc((nuint)size);
+#else
+            return (void*)Marshal.AllocHGlobal((nint)size);
+#endif
+        }
 
-    public static void* malloc(size_t size)
-    {
-        return NativeMemory.AllocZeroed((nuint)size);
-    }
+        public static void free(void* memory)
+        {
+#if NET6_0_OR_GREATER
+            NativeMemory.Free(memory);
+#else
+            Marshal.FreeHGlobal((nint)memory);
+#endif
+        }
 
-    public static void free(void* ptr)
-    {
-        NativeMemory.Free(ptr);
-    }
+        public static void memcpy(void* dst, void* src, nuint size) => Unsafe.CopyBlockUnaligned(dst, src, (uint)size);
 
-    [Conditional("DEBUG")]
-    public static void assert<T>(T _)
-    {
-    }
+        public static void memset(void* dst, byte val, nuint size) => Unsafe.InitBlockUnaligned(dst, val, (uint)size);
 
-    [Conditional("DEBUG")]
-    public static void assert(IKCPCB* _)
-    {
-    }
+        [Conditional("DEBUG")]
+        public static void assert<T>(T _)
+        {
+        }
 
-    [Conditional("DEBUG")]
-    public static void assert(IKCPSEG* _)
-    {
-    }
+        [Conditional("DEBUG")]
+        public static void assert(IKCPCB* _)
+        {
+        }
 
-    public static void abort()
-    {
-        Environment.Exit(0);
+        [Conditional("DEBUG")]
+        public static void assert(IKCPSEG* _)
+        {
+        }
+
+        public static void abort()
+        {
+            Environment.Exit(0);
+        }
     }
 }

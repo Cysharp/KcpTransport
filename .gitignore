@@ -116,6 +116,11 @@ nuget/tools/*
 **/.DS_Store
 .idea
 
+# JetBrains Rider
+.idea/
+*.DotSettings
+*.DotSettings.user
+
 # publish directory
 out/
 *.tsbuildinfo
