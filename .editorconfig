@@ -1,19 +1,33 @@
 # top-most EditorConfig file
 root = true
 
-# Default settings:
-# A newline ending every file
-# Use 4 spaces as indentation
 [*]
-insert_final_newline = true
+charset = utf-8
+end_of_line = lf
 indent_style = space
-indent_size = 4
+indent_size = 2
+insert_final_newline = true
 trim_trailing_whitespace = true
 
-[{appsettings.json,appsettings.*.json}]
-charset = utf-8-bom
-indent_style = space
+# Visual Studio Spell checker configs (https://learn.microsoft.com/en-us/visualstudio/ide/text-spell-checker?view=vs-2022#how-to-customize-the-spell-checker)
+spelling_exclusion_path  = ./exclusion.dic
+
+[*.cs]
 indent_size = 4
+charset = utf-8-bom
+end_of_line = unset
+
+# Solution files
+[*.{sln,slnx}]
+end_of_line = unset
+
+# MSBuild project files
+[*.{csproj,props,targets}]
+end_of_line = unset
+
+# Xml config files
+[*.{ruleset,config,nuspec,resx,runsettings,DotSettings}]
+end_of_line = unset
 
 # Generated code
 [*{_AssemblyInfo.cs,.notsupported.cs}]
@@ -53,15 +67,8 @@ dotnet_style_qualification_for_property = false:none
 dotnet_style_qualification_for_field = false:none
 dotnet_style_qualification_for_event = false:none
 
-# Razor files
-[*.razor]
-charset = utf-8-bom
-
-# C# files
+# C# code style settings
 [*.cs]
-charset = utf-8-bom
-
-# New line preferences
 csharp_new_line_before_open_brace = all
 csharp_new_line_before_else = true
 csharp_new_line_before_catch = true
