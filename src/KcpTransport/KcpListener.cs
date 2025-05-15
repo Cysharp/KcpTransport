@@ -33,7 +33,7 @@ namespace KcpTransport
 
     public delegate ReadOnlySpan<byte> HashFunc();
 #if LANG_VERSION_10_OR_GREATER
-    public sealed class record KcpListenerOptions : KcpOptions
+    public sealed record class KcpListenerOptions : KcpOptions
 #else
     public sealed class KcpListenerOptions : KcpOptions
 #endif
