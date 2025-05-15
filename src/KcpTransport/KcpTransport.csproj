@@ -1,38 +1,41 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>net8.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>1701;1702;1591;1573</NoWarn>
 
-        <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <NoWarn>1701;1702;1591;1573</NoWarn>
+    <!-- NuGet Packaging -->
+    <PackageTags>rudp</PackageTags>
+    <Description>KcpTransport is a Pure C# implementation of RUDP for high-performance real-time
+      network communication.</Description>
+    <!--<DefineConstants>LANG_VERSION_10_OR_GREATER;LANG_VERSION_11_OR_GREATER</DefineConstants>-->
+  </PropertyGroup>
 
-        <!-- NuGet Packaging -->
-        <PackageTags>rudp</PackageTags>
-        <Description>KcpTransport is a Pure C# implementation of RUDP for high-performance real-time network communication.</Description>
-    </PropertyGroup>
+  <ItemGroup>
+    <None Include="../../Icon.png" Pack="true" PackagePath="/" />
+    <EmbeddedResource Include="..\..\LICENSE" />
+    <InternalsVisibleTo
+      Include="KcpTransport.Tests, PublicKey=00240000048000009400000006020000002400005253413100040000010001000144ec28f1e9ef7b17dacc47425a7a153aea0a7baa590743a2d1a86f4b3e10a8a12712c6e647966bfd8bd6e830048b23bd42bbc56f179585c15b8c19cf86c0eed1b73c993dd7a93a30051dd50fdda0e4d6b65e6874e30f1c37cf8bcbc7fe02c7f2e6a0a3327c0ccc1631bf645f40732521fa0b41a30c178d08f7dd779d42a1ee" />
+  </ItemGroup>
 
-    <ItemGroup>
-        <None Include="../../Icon.png" Pack="true" PackagePath="/" />
-        <EmbeddedResource Include="..\..\LICENSE" />
-        <InternalsVisibleTo Include="KcpTransport.Tests, PublicKey=00240000048000009400000006020000002400005253413100040000010001000144ec28f1e9ef7b17dacc47425a7a153aea0a7baa590743a2d1a86f4b3e10a8a12712c6e647966bfd8bd6e830048b23bd42bbc56f179585c15b8c19cf86c0eed1b73c993dd7a93a30051dd50fdda0e4d6b65e6874e30f1c37cf8bcbc7fe02c7f2e6a0a3327c0ccc1631bf645f40732521fa0b41a30c178d08f7dd779d42a1ee" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
-    </ItemGroup>
-
-    <ItemGroup>
-        <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.49-beta">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
-        <PackageReference Include="PolySharp" Version="1.13.2">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
-    </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.183">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="System.Memory" Version="4.6.3" />
+    <PackageReference Include="System.Net.Sockets" Version="4.3.0" />
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
+    <PackageReference Include="System.Threading.Channels" Version="8.0.0" />
+    <PackageReference Include="System.Threading.Tasks" Version="4.3.0" />
+    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3" />
+    <PackageReference Include="System.Buffers" Version="4.6.1" />
+    <PackageReference Include="System.IO.Pipelines" Version="8.0.0" />
+  </ItemGroup>
 
 </Project>
