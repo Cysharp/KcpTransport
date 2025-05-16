@@ -173,7 +173,7 @@ namespace KcpTransport
 #if NET6_0_OR_GREATER
                     var received = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, receivedAddress, cancellationToken);
 #else
-                    var result = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, options.ListenEndPoint);
+                    var result = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, options.ListenEndPoint, cancellationToken);
                     var received = result.ReceivedBytes;
                     receivedAddress = result.RemoteEndPoint.Serialize();
 #endif

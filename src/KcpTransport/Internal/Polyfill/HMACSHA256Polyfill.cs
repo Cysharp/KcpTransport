@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace KcpTransport.Internal.Polyfill
+namespace KcpTransport
 {
     internal static class HMACSHA256Polyfill
     {

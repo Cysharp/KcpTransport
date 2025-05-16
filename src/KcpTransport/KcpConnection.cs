@@ -136,11 +136,8 @@ namespace KcpTransport
             var socket = new Socket(options.RemoteEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
             socket.Blocking = false;
             options.ConfigureSocket?.Invoke(socket, options);
-#if NET6_0_OR_GREATER
+
             await socket.ConnectAsync(options.RemoteEndPoint, cancellationToken).ConfigureAwait(options.ConfigureAwait);
-#else
-            await socket.ConnectAsync(options.RemoteEndPoint).ConfigureAwait(options.ConfigureAwait);
-#endif
 
             SendHandshakeInitialRequest(socket);
 
