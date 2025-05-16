@@ -9,6 +9,7 @@ using size_t = System.IntPtr;
 using System.Runtime.InteropServices;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System;
 
 namespace KcpTransport.LowLevel
 {

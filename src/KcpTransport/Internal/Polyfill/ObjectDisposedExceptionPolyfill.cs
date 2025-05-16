@@ -13,7 +13,6 @@ namespace KcpTransport
         {
 #if NET7_0_OR_GREATER
             ObjectDisposedException.ThrowIf(condition, @object);
-
 #else
             if (condition)
             {

@@ -1,12 +1,16 @@
 ﻿using KcpTransport.LowLevel;
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 
 namespace KcpTransport
 {
@@ -166,12 +170,12 @@ namespace KcpTransport
                 try
                 {
                     // Socket is datagram so received data contains full block
-#if NETSTANDARD
+#if NET6_0_OR_GREATER
+                    var received = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, receivedAddress, cancellationToken);
+#else
                     var result = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, options.ListenEndPoint);
                     var received = result.ReceivedBytes;
                     receivedAddress = result.RemoteEndPoint.Serialize();
-#else
-                    var received = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, receivedAddress, cancellationToken);
 #endif
 
                     // first 4 byte is conversationId or extra packet type
@@ -319,11 +323,11 @@ namespace KcpTransport
                 MemoryMarshalPolyfill.Write(data.Slice(4), conversationId);
                 MemoryMarshalPolyfill.Write(data.Slice(8), cookie);
                 MemoryMarshalPolyfill.Write(data.Slice(12), timestamp);
-#if NETSTANDARD
+#if NET8_0_OR_GREATER
+                socket.SendTo(data, SocketFlags.None, clientAddress);
+#else
                 var ipEndPoint = clientAddress.ToIPEndPoint();
                 socket.SendTo(data.ToArray(), SocketFlags.None, ipEndPoint);
-#else
-                socket.SendTo(data, SocketFlags.None, clientAddress);
 #endif
             }
 
@@ -331,11 +335,11 @@ namespace KcpTransport
             {
                 Span<byte> data = stackalloc byte[4];
                 MemoryMarshalPolyfill.Write(data, (uint)PacketType.HandshakeOkResponse);
-#if NETSTANDARD
+#if NET8_0_OR_GREATER
+                socket.SendTo(data, SocketFlags.None, clientAddress);
+#else
                 var ipEndPoint = clientAddress.ToIPEndPoint();
                 socket.SendTo(data.ToArray(), SocketFlags.None, ipEndPoint);
-#else
-                socket.SendTo(data, SocketFlags.None, clientAddress);
 #endif
             }
 
@@ -343,11 +347,11 @@ namespace KcpTransport
             {
                 Span<byte> data = stackalloc byte[4];
                 MemoryMarshalPolyfill.Write(data, (uint)PacketType.HandshakeNgResponse);
-#if NETSTANDARD
+#if NET8_0_OR_GREATER
+                socket.SendTo(data, SocketFlags.None, clientAddress);
+#else
                 var ipEndPoint = clientAddress.ToIPEndPoint();
                 socket.SendTo(data.ToArray(), SocketFlags.None, ipEndPoint);
-#else
-                socket.SendTo(data, SocketFlags.None, clientAddress);
 #endif
             }
 

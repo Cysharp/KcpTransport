@@ -1,6 +1,7 @@
 ﻿#pragma warning disable CS8500
 
 using KcpTransport.LowLevel;
+using System;
 using System.Buffers;
 using System.Diagnostics;
 using System.IO.Pipelines;
@@ -8,6 +9,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 using static KcpTransport.LowLevel.KcpMethods;
 
 namespace KcpTransport
@@ -133,10 +136,10 @@ namespace KcpTransport
             var socket = new Socket(options.RemoteEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
             socket.Blocking = false;
             options.ConfigureSocket?.Invoke(socket, options);
-#if NETSTANDARD
-            await socket.ConnectAsync(options.RemoteEndPoint).ConfigureAwait(options.ConfigureAwait);
-#else
+#if NET6_0_OR_GREATER
             await socket.ConnectAsync(options.RemoteEndPoint, cancellationToken).ConfigureAwait(options.ConfigureAwait);
+#else
+            await socket.ConnectAsync(options.RemoteEndPoint).ConfigureAwait(options.ConfigureAwait);
 #endif
 
             SendHandshakeInitialRequest(socket);
