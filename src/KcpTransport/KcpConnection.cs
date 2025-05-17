@@ -45,7 +45,7 @@ namespace KcpTransport
     public class KcpConnection : IDisposable
     {
         static readonly TimeSpan PingInterval = TimeSpan.FromSeconds(5);
-
+        public EndPoint? RemoteEndPoint { get => remoteAddress?.ToIPEndPoint(); }
         unsafe IKCPCB* kcp;
         uint conversationId;
         SocketAddress? remoteAddress;
@@ -73,10 +73,11 @@ namespace KcpTransport
             this.keepAliveDelay = options.KeepAliveDelay;
             this.kcp = ikcp_create(conversationId, GCHandle.ToIntPtr(GCHandle.Alloc(this)).ToPointer());
             this.kcp->output = &KcpOutputCallback;
+            this.kcp->stream = options.SteamMode;
             ConfigKcpWorkMode(options.EnableNoDelay, options.IntervalMilliseconds, options.Resend, options.EnableFlowControl);
             ConfigKcpWindowSize(options.WindowSize.SendWindow, options.WindowSize.ReceiveWindow);
             ConfigKcpMaximumTransmissionUnit(options.MaximumTransmissionUnit);
-
+            this.remoteAddress = options?.RemoteEndPoint?.Serialize();
             this.socket = socket;
             this.stream = new KcpStream(this);
             this.lastReceivedTimestamp = startingTimestamp;
@@ -99,6 +100,7 @@ namespace KcpTransport
             this.conversationId = conversationId;
             this.keepAliveDelay = options.KeepAliveDelay;
             this.kcp = ikcp_create(conversationId, GCHandle.ToIntPtr(GCHandle.Alloc(this)).ToPointer());
+            this.kcp->stream = options.SteamMode;
             this.kcp->output = &KcpOutputCallback;
             ConfigKcpWorkMode(options.EnableNoDelay, options.IntervalMilliseconds, options.Resend, options.EnableFlowControl);
             ConfigKcpWindowSize(options.WindowSize.SendWindow, options.WindowSize.ReceiveWindow);
@@ -121,19 +123,19 @@ namespace KcpTransport
             // StartUpdateKcpLoopAsync(); server operation, Update will be called from KcpListener so no need update self.
         }
 
-        public static ValueTask<KcpConnection> ConnectAsync(string host, int port, CancellationToken cancellationToken = default)
+        public static ValueTask<KcpConnection> ConnectAsync(string host, int port, int streamMode = 0, CancellationToken cancellationToken = default)
         {
-            return ConnectAsync(new IPEndPoint(IPAddress.Parse(host), port), cancellationToken);
+            return ConnectAsync(new IPEndPoint(IPAddress.Parse(host).MapToIPv6(), port), streamMode, cancellationToken);
         }
 
-        public static ValueTask<KcpConnection> ConnectAsync(EndPoint remoteEndPoint, CancellationToken cancellationToken = default)
+        public static ValueTask<KcpConnection> ConnectAsync(EndPoint remoteEndPoint, int streamMode = 0, CancellationToken cancellationToken = default)
         {
-            return ConnectAsync(new KcpClientConnectionOptions { RemoteEndPoint = remoteEndPoint }, cancellationToken);
+            return ConnectAsync(new KcpClientConnectionOptions { RemoteEndPoint = remoteEndPoint , SteamMode = streamMode }, cancellationToken);
         }
 
         public static async ValueTask<KcpConnection> ConnectAsync(KcpClientConnectionOptions options, CancellationToken cancellationToken = default)
         {
-            var socket = new Socket(options.RemoteEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+            var socket = new Socket(options.RemoteEndPoint?.AddressFamily?? AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
             socket.Blocking = false;
             options.ConfigureSocket?.Invoke(socket, options);
 

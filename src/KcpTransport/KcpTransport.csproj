@@ -11,8 +11,13 @@
 
     <!-- NuGet Packaging -->
     <PackageTags>rudp</PackageTags>
-    <Description>KcpTransport is a Pure C# implementation of RUDP for high-performance real-time
-      network communication.</Description>
+    <Description>
+      KcpTransport is a Pure C# implementation of RUDP for high-performance real-time
+      network communication.
+    </Description>
+
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(TargetFramework)' != 'netstandard2.1'">
     <DefineConstants>LANG_VERSION_10_OR_GREATER;LANG_VERSION_11_OR_GREATER</DefineConstants>
   </PropertyGroup>
 

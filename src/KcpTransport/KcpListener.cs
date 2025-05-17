@@ -25,6 +25,7 @@ namespace KcpTransport
         public int Resend { get; set; } = 2;
         public bool EnableFlowControl { get; set; } = false;
         public (int SendWindow, int ReceiveWindow) WindowSize { get; set; } = ((int)KcpMethods.IKCP_WND_SND, (int)KcpMethods.IKCP_WND_RCV);
+        public int SteamMode { get; set; }
         public int MaximumTransmissionUnit { get; set; } = (int)KcpMethods.IKCP_MTU_DEF;
         // public int MinimumRetransmissionTimeout { get; set; } this value is changed in ikcp_nodelay(and use there default) so no configurable.
     }
@@ -79,14 +80,14 @@ namespace KcpTransport
         Thread updateConnectionsWorkerThread;
         CancellationTokenSource listenerCancellationTokenSource = new();
 
-        public static ValueTask<KcpListener> ListenAsync(string host, int port, CancellationToken cancellationToken = default)
+        public static ValueTask<KcpListener> ListenAsync(string host, int port, int streamMode = 0, CancellationToken cancellationToken = default)
         {
-            return ListenAsync(new IPEndPoint(IPAddress.Parse(host), port), cancellationToken);
+            return ListenAsync(new IPEndPoint(IPAddress.Parse(host).MapToIPv6(), port), streamMode, cancellationToken);
         }
 
-        public static ValueTask<KcpListener> ListenAsync(IPEndPoint listenEndPoint, CancellationToken cancellationToken = default)
+        public static ValueTask<KcpListener> ListenAsync(IPEndPoint listenEndPoint, int streamMode = 0, CancellationToken cancellationToken = default)
         {
-            return ListenAsync(new KcpListenerOptions { ListenEndPoint = listenEndPoint }, cancellationToken);
+            return ListenAsync(new KcpListenerOptions { ListenEndPoint = listenEndPoint, SteamMode = streamMode }, cancellationToken);
         }
 
         public static ValueTask<KcpListener> ListenAsync(KcpListenerOptions options, CancellationToken cancellationToken = default)
@@ -99,7 +100,7 @@ namespace KcpTransport
 
         KcpListener(KcpListenerOptions options)
         {
-            Socket socket = new Socket(options.ListenEndPoint.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+            Socket socket = new Socket(options.ListenEndPoint?.AddressFamily ?? AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
             socket.Blocking = false;
             socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true); // in Linux, as SO_REUSEPORT
 
