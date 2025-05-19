@@ -82,7 +82,7 @@ namespace KcpTransport
 
         public static ValueTask<KcpListener> ListenAsync(string host, int port, int streamMode = 0, CancellationToken cancellationToken = default)
         {
-            return ListenAsync(new IPEndPoint(IPAddress.Parse(host).MapToIPv6(), port), streamMode, cancellationToken);
+            return ListenAsync(new IPEndPoint(IPAddress.Parse(host), port), streamMode, cancellationToken);
         }
 
         public static ValueTask<KcpListener> ListenAsync(IPEndPoint listenEndPoint, int streamMode = 0, CancellationToken cancellationToken = default)

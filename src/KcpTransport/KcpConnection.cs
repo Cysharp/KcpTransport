@@ -125,7 +125,7 @@ namespace KcpTransport
 
         public static ValueTask<KcpConnection> ConnectAsync(string host, int port, int streamMode = 0, CancellationToken cancellationToken = default)
         {
-            return ConnectAsync(new IPEndPoint(IPAddress.Parse(host).MapToIPv6(), port), streamMode, cancellationToken);
+            return ConnectAsync(new IPEndPoint(IPAddress.Parse(host), port), streamMode, cancellationToken);
         }
 
         public static ValueTask<KcpConnection> ConnectAsync(EndPoint remoteEndPoint, int streamMode = 0, CancellationToken cancellationToken = default)
