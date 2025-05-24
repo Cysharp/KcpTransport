@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Socket = KcpTransport.KcpSocket;
 
 namespace KcpTransport
 {
@@ -103,7 +104,6 @@ namespace KcpTransport
             Socket socket = new Socket(options.ListenEndPoint?.AddressFamily ?? AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
             socket.Blocking = false;
             socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true); // in Linux, as SO_REUSEPORT
-
             // http://handyresearcher.blog.fc2.com/blog-entry-18.html
             // https://stackoverflow.com/questions/7201862/an-existing-connection-was-forcibly-closed-by-the-remote-host/7478498
             // https://stackoverflow.com/questions/34242622/windows-udp-sockets-recvfrom-fails-with-error-10054
@@ -115,6 +115,8 @@ namespace KcpTransport
                 const uint SIO_UDP_CONNRESET = IOC_IN | IOC_VENDOR | 12;
                 socket.IOControl(unchecked((int)SIO_UDP_CONNRESET), new byte[] { 0x00 }, null);
             }
+
+            options.ConfigureSocket += ConfigureSocket;
 
             options.ConfigureSocket?.Invoke(socket, options, ListenerSocketType.Receive);
 
@@ -148,6 +150,11 @@ namespace KcpTransport
                 Priority = ThreadPriority.AboveNormal,
             };
             updateConnectionsWorkerThread.Start(options);
+
+            static void ConfigureSocket(KcpSocket socket, KcpListenerOptions options, ListenerSocketType listenerSocketType)
+            {
+                socket.ListenerSocketType = listenerSocketType;
+            }
         }
 
         public ValueTask<KcpConnection> AcceptConnectionAsync(CancellationToken cancellationToken = default)
@@ -171,7 +178,7 @@ namespace KcpTransport
                 try
                 {
                     // Socket is datagram so received data contains full block
-#if NET6_0_OR_GREATER
+#if NET8_0_OR_GREATER
                     var received = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, receivedAddress, cancellationToken);
 #else
                     var result = await socket.ReceiveFromAsync(socketBuffer, SocketFlags.None, options.ListenEndPoint, cancellationToken);

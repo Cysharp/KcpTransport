@@ -22,12 +22,14 @@ using System.Diagnostics;
 //await client;
 
 
+//var server = Task.CompletedTask;
 
 var server = Task.Run(async () =>
 {
     //UdpSandbox.UdpHelloServer3();
     await KcpSandbox.KcpEchoServer();
 });
+
 
 Thread.Sleep(100);
 

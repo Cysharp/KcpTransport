@@ -12,6 +12,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using static KcpTransport.LowLevel.KcpMethods;
+using Socket = KcpTransport.KcpSocket;
 
 namespace KcpTransport
 {
@@ -112,6 +113,7 @@ namespace KcpTransport
             this.socket = new Socket(remoteAddress.Family, SocketType.Dgram, ProtocolType.Udp);
             this.socket.Blocking = false;
             this.socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            options.ConfigureSocket += ConfigureSocket;
             options.ConfigureSocket?.Invoke(socket, options, ListenerSocketType.Send);
             this.socket.Bind(options.ListenEndPoint);
             this.socket.Connect(remoteAddress.ToIPEndPoint());
@@ -120,7 +122,12 @@ namespace KcpTransport
             this.lastReceivedTimestamp = startingTimestamp;
 
             UpdateKcp(); // initial set kcp timestamp
-            // StartUpdateKcpLoopAsync(); server operation, Update will be called from KcpListener so no need update self.
+                         // StartUpdateKcpLoopAsync(); server operation, Update will be called from KcpListener so no need update self.
+
+            static void ConfigureSocket(KcpSocket socket, KcpListenerOptions options, ListenerSocketType listenerSocketType)
+            {
+                socket.ListenerSocketType = listenerSocketType;
+            }
         }
 
         public static ValueTask<KcpConnection> ConnectAsync(string host, int port, int streamMode = 0, CancellationToken cancellationToken = default)
@@ -191,10 +198,12 @@ namespace KcpTransport
         async Task StartSocketEventLoopAsync(KcpClientConnectionOptions options)
         {
 #if NET8_0_OR_GREATER
-            var forceYielding = ConfigureAwaitOptions.ForceYielding; 
+            var forceYielding = ConfigureAwaitOptions.ForceYielding;
 #else
             var forceYielding = false;
+            await Task.Yield();
 #endif
+
             await Task.CompletedTask.ConfigureAwait(forceYielding);
 
             var cancellationToken = this.connectionCancellationTokenSource.Token;
