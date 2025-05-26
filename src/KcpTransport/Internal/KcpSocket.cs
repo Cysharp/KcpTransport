@@ -12,53 +12,87 @@ using System.Threading.Tasks;
 #nullable enable
 namespace KcpTransport
 {
-    public class KcpSocket : Socket
+    public class KcpSocket : IDisposable
     {
-        ListenerSocketType? _listenerSocketType;
+        private readonly Socket? _underlyingSocket;
 
         internal EndPoint? _remoteEndPoint;
 
-        public new EndPoint? RemoteEndPoint { get => _remoteEndPoint; set => _remoteEndPoint = value; }
-
-        public ListenerSocketType? @ListenerSocketType { get => _listenerSocketType; set => _listenerSocketType = value; }
-
-        public KcpSocket(AddressFamily addressFamily, SocketType socketType, ProtocolType protocolType) : base(addressFamily, socketType, protocolType)
+        public KcpSocket(Socket underlyingSocket)
         {
+            _underlyingSocket = underlyingSocket;
         }
 
-        public void Bind(EndPoint localEP)
+        public void Bind(EndPoint localEndPoint)
         {
-            if (_listenerSocketType == KcpTransport.ListenerSocketType.Receive)
+            _underlyingSocket?.Bind(localEndPoint);
+        }
+
+        public async ValueTask<uint> ConnectAsync(EndPoint remoteEndPoint, CancellationToken cancellationToken)
+        {
+            _remoteEndPoint = remoteEndPoint;
+
+            await _underlyingSocket!.ConnectAsync(remoteEndPoint, cancellationToken).ConfigureAwait(false);
+
+            SendHandshakeInitialRequest(_underlyingSocket);
+
+            // TODO: retry?
+            var handshakeBuffer = new byte[20];
+#if NET7_0_OR_GREATER
+            var received = await _underlyingSocket!.ReceiveAsync(handshakeBuffer);
+#else
+            var arraySegment = new ArraySegment<byte>(handshakeBuffer);
+            var received = await socket.ReceiveAsync(arraySegment, SocketFlags.None);
+#endif
+            if (received != 20) throw new Exception();
+
+            var conversationId = MemoryMarshal.Read<uint>(handshakeBuffer.AsSpan(4));
+            SendHandshakeOkRequest(_underlyingSocket, handshakeBuffer);
+#if NET7_0_OR_GREATER
+            var received2 = await _underlyingSocket!.ReceiveAsync(handshakeBuffer);
+#else
+            var received2 = await socket.ReceiveAsync(arraySegment, SocketFlags.None);
+#endif
+            if (received2 != 4) throw new Exception();
+            var responseCode = (PacketType)MemoryMarshal.Read<uint>(handshakeBuffer);
+
+            if (responseCode != PacketType.HandshakeOkResponse) throw new Exception();
+
+            return conversationId;
+
+            static void SendHandshakeInitialRequest(Socket socket)
             {
-                base.Bind(localEP);
+                Span<byte> data = stackalloc byte[4];
+                MemoryMarshalPolyfill.Write(data, (uint)PacketType.HandshakeInitialRequest);
+                socket?.Send(data);
+            }
+
+            static void SendHandshakeOkRequest(Socket socket, Span<byte> data)
+            {
+                MemoryMarshalPolyfill.Write(data, (uint)PacketType.HandshakeOkRequest);
+                socket?.Send(data);
             }
         }
 
-        public new ValueTask ConnectAsync(EndPoint remoteEP, CancellationToken cancellationToken)
-        {
-            _remoteEndPoint = remoteEP;
-#if NET5_0_OR_GREATER
-            return ValueTask.CompletedTask;
-#else
-            return default;
-#endif
-        }
+        public ValueTask<int> ReceiveAsync(Memory<byte> buffer, SocketFlags socketFlags, CancellationToken cancellationToken = default) => _underlyingSocket!.ReceiveAsync(buffer, socketFlags, cancellationToken);
 
-        public new int Send(ReadOnlySpan<byte> buffer)
+        public int Send(ReadOnlySpan<byte> buffer)
         {
 #if NET8_0_OR_GREATER
-            return base.SendTo(buffer, RemoteEndPoint);
+            return _underlyingSocket!.SendTo(buffer, _remoteEndPoint!);
 #else
-            return base.SendTo(buffer.ToArray(), RemoteEndPoint);
+            return _underlyingSocket.SendTo(buffer.ToArray(), _remoteEndPoint);
 #endif
         }
 
-        public new void Connect(EndPoint remoteEP)
+        public void Connect(EndPoint remoteEndPoint)
         {
-            if (_listenerSocketType ==  KcpTransport.ListenerSocketType.Send)
-            {
-                this.RemoteEndPoint = remoteEP;
-            }
+            _remoteEndPoint = remoteEndPoint;
+        }
+
+        public void Dispose()
+        {
+            _underlyingSocket?.Dispose();
         }
     }
 }

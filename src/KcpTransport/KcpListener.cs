@@ -11,7 +11,6 @@ using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using Socket = KcpTransport.KcpSocket;
 
 namespace KcpTransport
 {
@@ -116,8 +115,6 @@ namespace KcpTransport
                 socket.IOControl(unchecked((int)SIO_UDP_CONNRESET), new byte[] { 0x00 }, null);
             }
 
-            options.ConfigureSocket += ConfigureSocket;
-
             options.ConfigureSocket?.Invoke(socket, options, ListenerSocketType.Receive);
 
             var endPoint = options.ListenEndPoint;
@@ -151,10 +148,6 @@ namespace KcpTransport
             };
             updateConnectionsWorkerThread.Start(options);
 
-            static void ConfigureSocket(KcpSocket socket, KcpListenerOptions options, ListenerSocketType listenerSocketType)
-            {
-                socket.ListenerSocketType = listenerSocketType;
-            }
         }
 
         public ValueTask<KcpConnection> AcceptConnectionAsync(CancellationToken cancellationToken = default)

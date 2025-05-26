@@ -12,7 +12,6 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using static KcpTransport.LowLevel.KcpMethods;
-using Socket = KcpTransport.KcpSocket;
 
 namespace KcpTransport
 {
@@ -29,7 +28,6 @@ namespace KcpTransport
 #else
         public EndPoint? RemoteEndPoint { get; set; }
 #endif
-
         public TimeSpan UpdatePeriod { get; set; } = TimeSpan.FromMilliseconds(5);
         public bool ConfigureAwait { get; set; } = false;
         public TimeSpan KeepAliveDelay { get; set; } = TimeSpan.FromSeconds(20);
@@ -51,7 +49,7 @@ namespace KcpTransport
         uint conversationId;
         SocketAddress? remoteAddress;
         KcpStream stream;
-        Socket socket;
+        KcpSocket socket;
         Task? receiveEventLoopTask; // only used for client
         Thread? updateKcpWorkerThread; // only used for client
         ValueTask<FlushResult> lastFlushResult = default;
@@ -68,7 +66,7 @@ namespace KcpTransport
         internal object SyncRoot => gate;
 
         // create by User(from KcpConnection.ConnectAsync), for client connection
-        unsafe KcpConnection(Socket socket, uint conversationId, KcpClientConnectionOptions options)
+        unsafe KcpConnection(KcpSocket socket, uint conversationId, KcpClientConnectionOptions options)
         {
             this.conversationId = conversationId;
             this.keepAliveDelay = options.KeepAliveDelay;
@@ -110,12 +108,19 @@ namespace KcpTransport
             this.remoteAddress = remoteAddress.Clone();
 
             // bind same port and connect client IP, this socket is used only for Send
-            this.socket = new Socket(remoteAddress.Family, SocketType.Dgram, ProtocolType.Udp);
-            this.socket.Blocking = false;
-            this.socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            options.ConfigureSocket += ConfigureSocket;
+
+            var socket = new Socket(remoteAddress.Family, SocketType.Dgram, ProtocolType.Udp);
+
+            socket.Blocking = false;
+
+            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+
+            this.socket = new KcpSocket(socket);
+
             options.ConfigureSocket?.Invoke(socket, options, ListenerSocketType.Send);
+
             this.socket.Bind(options.ListenEndPoint);
+
             this.socket.Connect(remoteAddress.ToIPEndPoint());
 
             this.stream = new KcpStream(this);
@@ -124,10 +129,6 @@ namespace KcpTransport
             UpdateKcp(); // initial set kcp timestamp
                          // StartUpdateKcpLoopAsync(); server operation, Update will be called from KcpListener so no need update self.
 
-            static void ConfigureSocket(KcpSocket socket, KcpListenerOptions options, ListenerSocketType listenerSocketType)
-            {
-                socket.ListenerSocketType = listenerSocketType;
-            }
         }
 
         public static ValueTask<KcpConnection> ConnectAsync(string host, int port, int streamMode = 0, CancellationToken cancellationToken = default)
@@ -137,57 +138,24 @@ namespace KcpTransport
 
         public static ValueTask<KcpConnection> ConnectAsync(EndPoint remoteEndPoint, int streamMode = 0, CancellationToken cancellationToken = default)
         {
-            return ConnectAsync(new KcpClientConnectionOptions { RemoteEndPoint = remoteEndPoint , SteamMode = streamMode }, cancellationToken);
+            return ConnectAsync(new KcpClientConnectionOptions { RemoteEndPoint = remoteEndPoint, SteamMode = streamMode }, cancellationToken);
         }
 
         public static async ValueTask<KcpConnection> ConnectAsync(KcpClientConnectionOptions options, CancellationToken cancellationToken = default)
         {
-            var socket = new Socket(options.RemoteEndPoint?.AddressFamily?? AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
+            var socket = new Socket(options.RemoteEndPoint?.AddressFamily ?? AddressFamily.InterNetworkV6, SocketType.Dgram, ProtocolType.Udp);
+
             socket.Blocking = false;
+
             options.ConfigureSocket?.Invoke(socket, options);
 
-            await socket.ConnectAsync(options.RemoteEndPoint, cancellationToken).ConfigureAwait(options.ConfigureAwait);
+            var kcpSocket = new KcpSocket(socket);
 
-            SendHandshakeInitialRequest(socket);
+            var conversationId = await kcpSocket.ConnectAsync(options.RemoteEndPoint!, cancellationToken).ConfigureAwait(options.ConfigureAwait);
 
-            // TODO: retry?
-            var handshakeBuffer = new byte[20];
-#if NET7_0_OR_GREATER
-            var received = await socket.ReceiveAsync(handshakeBuffer);
-#else
-            var arraySegment = new ArraySegment<byte>(handshakeBuffer);
-            var received = await socket.ReceiveAsync(arraySegment, SocketFlags.None);
-#endif
-            if (received != 20) throw new Exception();
-
-            var conversationId = MemoryMarshal.Read<uint>(handshakeBuffer.AsSpan(4));
-            SendHandshakeOkRequest(socket, handshakeBuffer);
-#if NET7_0_OR_GREATER
-            var received2 = await socket.ReceiveAsync(handshakeBuffer);
-#else
-            var received2 = await socket.ReceiveAsync(arraySegment, SocketFlags.None);
-#endif
-            if (received2 != 4) throw new Exception();
-            var responseCode = (PacketType)MemoryMarshal.Read<uint>(handshakeBuffer);
-
-            if (responseCode != PacketType.HandshakeOkResponse) throw new Exception();
-
-            var connection = new KcpConnection(socket, conversationId, options);
+            var connection = new KcpConnection(kcpSocket, conversationId, options);
 
             return connection;
-
-            static void SendHandshakeInitialRequest(Socket socket)
-            {
-                Span<byte> data = stackalloc byte[4];
-                MemoryMarshalPolyfill.Write(data, (uint)PacketType.HandshakeInitialRequest);
-                socket.Send(data);
-            }
-
-            static void SendHandshakeOkRequest(Socket socket, Span<byte> data)
-            {
-                MemoryMarshalPolyfill.Write(data, (uint)PacketType.HandshakeOkRequest);
-                socket.Send(data);
-            }
         }
 
         public ValueTask<KcpStream> OpenOutboundStreamAsync()
