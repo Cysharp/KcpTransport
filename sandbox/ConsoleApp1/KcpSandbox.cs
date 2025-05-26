@@ -13,7 +13,7 @@ internal class KcpSandbox
 
         var listener = await KcpListener.ListenAsync(new KcpListenerOptions
         {
-            ListenEndPoint = new IPEndPoint(IPAddress.Parse("127.0.0.1"), listenPort),
+            ListenEndPoint = new IPEndPoint(IPAddress.Any, listenPort),
             EventLoopCount = 1,
             KeepAliveDelay = TimeSpan.FromSeconds(10),
             ConnectionTimeout = TimeSpan.FromSeconds(20),
@@ -35,9 +35,9 @@ internal class KcpSandbox
                     var len = await stream.ReadAsync(buffer);
 
                     var str = Encoding.UTF8.GetString(buffer, 0, len);
-                    Console.WriteLine("Server Received: " + str);
+                    Console.WriteLine($"Server Received: {str}" );
 
-                    await stream.WriteAsync(Encoding.UTF8.GetBytes(str));
+                    await stream.WriteAsync(Encoding.UTF8.GetBytes($"{str}"));
                     //await stream.WriteUnreliableAsync(Encoding.UTF8.GetBytes(str));
                 }
             }
@@ -59,7 +59,7 @@ internal class KcpSandbox
             while (true)
             {
                 // var inputText = Console.ReadLine();
-                var inputText = id + ":" + Random.Shared.Next().ToString();
+                var inputText = id + ":" + Random.Shared.Next().ToString() + "公司电脑";
 
                 await stream.WriteAsync(Encoding.UTF8.GetBytes(inputText!));
 
