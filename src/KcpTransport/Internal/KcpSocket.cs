@@ -34,25 +34,18 @@ namespace KcpTransport
 
             await _underlyingSocket!.ConnectAsync(remoteEndPoint, cancellationToken).ConfigureAwait(false);
 
-            SendHandshakeInitialRequest(_underlyingSocket);
+            SendHandshakeInitialRequest(_underlyingSocket!);
 
             // TODO: retry?
+            // TODO: retry?
             var handshakeBuffer = new byte[20];
-#if NET7_0_OR_GREATER
-            var received = await _underlyingSocket!.ReceiveAsync(handshakeBuffer);
-#else
-            var arraySegment = new ArraySegment<byte>(handshakeBuffer);
-            var received = await socket.ReceiveAsync(arraySegment, SocketFlags.None);
-#endif
+            var received = await _underlyingSocket!.ReceiveAsync(handshakeBuffer, cancellationToken);
             if (received != 20) throw new Exception();
 
             var conversationId = MemoryMarshal.Read<uint>(handshakeBuffer.AsSpan(4));
-            SendHandshakeOkRequest(_underlyingSocket, handshakeBuffer);
-#if NET7_0_OR_GREATER
-            var received2 = await _underlyingSocket!.ReceiveAsync(handshakeBuffer);
-#else
-            var received2 = await socket.ReceiveAsync(arraySegment, SocketFlags.None);
-#endif
+            SendHandshakeOkRequest(_underlyingSocket!, handshakeBuffer);
+
+            var received2 = await _underlyingSocket!.ReceiveAsync(handshakeBuffer, cancellationToken);
             if (received2 != 4) throw new Exception();
             var responseCode = (PacketType)MemoryMarshal.Read<uint>(handshakeBuffer);
 
@@ -81,7 +74,7 @@ namespace KcpTransport
 #if NET8_0_OR_GREATER
             return _underlyingSocket!.SendTo(buffer, _remoteEndPoint!);
 #else
-            return _underlyingSocket.SendTo(buffer.ToArray(), _remoteEndPoint);
+            return _underlyingSocket!.SendTo(buffer.ToArray(), _remoteEndPoint);
 #endif
         }
 

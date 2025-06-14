@@ -15,37 +15,18 @@ namespace KcpTransport
 
         public static async ValueTask<SocketReceiveFromResult> ReceiveFromAsync(this Socket socket, ArraySegment<byte> buffer, SocketFlags socketFlags, EndPoint remoteEndPoint, CancellationToken cancellationToken)
         {
-            cancellationToken.ThrowIfCancellationRequested();
+            return await socket.ReceiveFromAsync(buffer, socketFlags, remoteEndPoint).WithCancellation(cancellationToken).ConfigureAwait(false);
+        }
 
-            var registration = cancellationToken.Register(socket.Close);
-
-            try
-            {
-                var result = await socket.ReceiveFromAsync(buffer, socketFlags, remoteEndPoint).ConfigureAwait(false);
-                return result;
-            }
-            finally
-            {
-                registration.Dispose();
-            }
+        public static async ValueTask<int> ReceiveAsync(this Socket socket, Memory<byte> buffer, CancellationToken cancellationToken = default) {
+            return await socket.ReceiveAsync(buffer, SocketFlags.None, cancellationToken).ConfigureAwait(false);
         }
 #endif
 
 #if !NET5_0_OR_GREATER
         public static async ValueTask ConnectAsync(this Socket socket, EndPoint endPoint, CancellationToken cancellationToken)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var registration = cancellationToken.Register(socket.Close);
-
-            try
-            {
-                await socket.ConnectAsync(endPoint).ConfigureAwait(false);
-            }
-            finally
-            {
-                registration.Dispose();
-            }
+            await socket.ConnectAsync(endPoint).WithCancellation(cancellationToken).ConfigureAwait(false);
         }
 #endif
 
